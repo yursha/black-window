@@ -1,3 +1,3 @@
 # terminal-emulator
 
-See [revie](review.md).
+See [review](review.md).
