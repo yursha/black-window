@@ -29,13 +29,17 @@ A vt220 terminal emulator.
 
 X Window System terminal emulator.
 
+Xvt is a VT100 terminal emulator for X.
+It is intended as a replacement for `xterm(1)` for users who do not require the more esoteric features of xterm.
+Specifically xvt does not implement the Tektronix 4014 emulation, session logging and [xt](https://en.wikipedia.org/wiki/X_Toolkit_Intrinsics)-style configurability.
+As a result, xvt uses much less memory.
+`xvt` options are mostly a subset of `xterm`.
+
 ## rxvt
 
 A fork of xvt.
 
 rxvt (acronym for *our extended virtual terminal*)
-
-A color vt102 terminal emulator intended as an `xterm(1)` replacement for users who do not require features such as Tektronix 4014 emulation and [xt](https://en.wikipedia.org/wiki/X_Toolkit_Intrinsics)-style configurability. As a result, rxvt-unicode uses much less memory. `rxvt` options are mostly a subset of `xterm`.
 
 - website: http://rxvt.sourceforge.net/
 - first release: 2000, last release: 2001
