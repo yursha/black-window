@@ -12,7 +12,7 @@ Programming language breakdown was obtained with [`github-linguist`](https://git
 
 ## xterm
 
-A vt220 terminal emulator.
+A vt220 terminal emulator. The standard terminal emulator for the X Window System.
 
 - website: 
 - first release: , last release: 
@@ -28,6 +28,8 @@ A vt220 terminal emulator.
 ## xvt
 
 X Window System terminal emulator.
+
+http://www.rpi.edu/dept/acm/www/packages/xvt-1.0.html
 
 Xvt is a VT100 terminal emulator for X.
 It is intended as a replacement for `xterm(1)` for users who do not require the more esoteric features of xterm.
