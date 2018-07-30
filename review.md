@@ -2,9 +2,26 @@
 
 A terminal emulator allows a user to interact with a shell from within a GUI environment (Xorg or Wayland).
 
+LOC metric was obtained with the following command (text files only):
+
+```
+sh> find . -type f -exec grep -Iq . {} \; -and -print0 | xargs -0 wc -l
+```
+
+Programming language breakdown was obtained with [`github-linguist`](https://github.com/github/linguist).
+
 ## xterm
 
 A vt220 terminal emulator.
+
+- website: 
+- first release: , last release: 
+- sources: 
+- version control: 
+- LOC (.h, .c): 174,973
+- dependencies:
+- implementation languages: C
+- features:
 
 ## uxterm
 
@@ -22,9 +39,9 @@ A color vt102 terminal emulator intended as an `xterm(1)` replacement for users 
 
 - website: http://rxvt.sourceforge.net/
 - first release: 2000, last release: 2001
-- LOC: 
+- LOC: 80,140
 - dependencies:
-- implementation languages:
+- implementation languages: C
 
 ## rxvt-unicode (a.k.a. urxvt)
 
@@ -36,7 +53,7 @@ Unlike the original `rxvt`, `rxvt-unicode` stores all text in Unicode internally
 - first release: 2003, last release: 2016
 - sources: http://cvs.schmorp.de/rxvt-unicode/
 - version control: CVS
-- LOC: 
+- LOC: 115,413
 - dependencies:
 - implementation languages:
 - features:
