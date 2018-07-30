@@ -8,6 +8,8 @@ LOC metric was obtained with the following command (text files only):
 sh> find . -type f -exec grep -Iq . {} \; -and -print0 | xargs -0 wc -l
 ```
 
+
+
 Programming language breakdown was obtained with [`github-linguist`](https://github.com/github/linguist).
 
 ## xterm, uxterm
