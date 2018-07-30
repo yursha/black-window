@@ -73,10 +73,6 @@ Unlike the original `rxvt`, `rxvt-unicode` stores all text in Unicode internally
     + rxvt-unicode-terminfo
     + startup-notification
     + gtk2-perl (optional) - to use the urxvt-tabbed
-    + libnsl (make)
-    + libxft (make)
-    + perl (make)
-    + startup-notification (make)
 - implementation languages: C (89%), Perl (4%), C++ (4%)
 - features:
   + ISO/IEC 14755
@@ -86,6 +82,9 @@ Unlike the original `rxvt`, `rxvt-unicode` stores all text in Unicode internally
 
 ## gnome-terminal
 
+- dependencies:
+
+
 # Supporting libraries
 
 ## X FreeType interface library (xft)
@@ -94,7 +93,26 @@ https://freedesktop.org/wiki/Software/Xft/
 
 It is designed to allow the FreeType rasterizer to be used with the X Rendering Extension; it is generally employed to use FreeType's anti-aliased fonts with the X Window System. Xft also depends on `fontconfig` for access to the system fonts.
 
+## VTE
 
+https://github.com/GNOME/vte
+
+- first release: 2002, last release: 2018
+- sources: https://github.com/GNOME/vte
+- LOC: 87,651
+- dependencies:
+    + gnutls
+    + gtk3
+    + pcre2
+    + vte-common
+    + git (make)
+    + glade (make)
+    + gobject-introspection (make)
+    + gperf (make)
+    + gtk-doc (make)
+    + intltool (make)
+    + vala (make)
+- implementation languages: C++ (83%), C (10%), M4 (2%), Vala (1%)
 
 
 
