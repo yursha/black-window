@@ -1,8 +1,10 @@
 # Review of terminal emulators
 
-A terminal emulator allows a user to interact with a shell from within a GUI environment (Xorg).
+A terminal emulator allows a user to interact with a shell from within a GUI environment (Xorg or Wayland).
 
 ## xterm
+
+A vt220 terminal emulator.
 
 ## uxterm
 
@@ -18,6 +20,12 @@ rxvt (acronym for *our extended virtual terminal*)
 
 A color vt102 terminal emulator intended as an `xterm(1)` replacement for users who do not require features such as Tektronix 4014 emulation and [xt](https://en.wikipedia.org/wiki/X_Toolkit_Intrinsics)-style configurability. As a result, rxvt-unicode uses much less memory. `rxvt` options are mostly a subset of `xterm`.
 
+- website: http://rxvt.sourceforge.net/
+- first release: 2000, last release: 2001
+- LOC: 
+- dependencies:
+- implementation languages:
+
 ## rxvt-unicode (a.k.a. urxvt)
 
 A fork of rxvt.
@@ -25,7 +33,7 @@ A fork of rxvt.
 Unlike the original `rxvt`, `rxvt-unicode` stores all text in Unicode internally. `rxvt-unicode` was born was solely because the author couldn't get `mlterm` to use one font for latin1 and another for japanese. 
 
 - website: http://software.schmorp.de/pkg/rxvt-unicode.html
-- started: 2005, first release: , last release:
+- first release: 2003, last release: 2016
 - sources: http://cvs.schmorp.de/rxvt-unicode/
 - version control: CVS
 - LOC: 
