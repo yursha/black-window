@@ -20,7 +20,7 @@ A vt220 terminal emulator.
 - version control: 
 - LOC (.h, .c): 174,973
 - dependencies:
-- implementation languages: C
+- implementation languages: C (68%), HTML (15%), Roff (11%), Perl (2%)
 - features:
 
 ## uxterm
@@ -41,7 +41,7 @@ A color vt102 terminal emulator intended as an `xterm(1)` replacement for users 
 - first release: 2000, last release: 2001
 - LOC: 80,140
 - dependencies:
-- implementation languages: C
+- implementation languages: C (78%), Shell (17%), Makefile (3%)
 
 ## rxvt-unicode (a.k.a. urxvt)
 
@@ -55,7 +55,7 @@ Unlike the original `rxvt`, `rxvt-unicode` stores all text in Unicode internally
 - version control: CVS
 - LOC: 115,413
 - dependencies:
-- implementation languages:
+- implementation languages: C (89%), Perl (4%), C++ (4%)
 - features:
   + ISO/IEC 14755
   + separate font per script
