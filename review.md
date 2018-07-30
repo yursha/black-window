@@ -18,7 +18,7 @@ A vt220 terminal emulator.
 - first release: , last release: 
 - sources: 
 - version control: 
-- LOC (.h, .c): 174,973
+- LOC: 174,973
 - dependencies:
 - implementation languages: C (68%), HTML (15%), Roff (11%), Perl (2%)
 - features:
