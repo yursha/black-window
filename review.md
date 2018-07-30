@@ -8,9 +8,19 @@ LOC metric was obtained with the following command (text files only):
 sh> find . -type f -exec grep -Iq . {} \; -and -print0 | xargs -0 wc -l
 ```
 
-
-
 Programming language breakdown was obtained with [`github-linguist`](https://github.com/github/linguist).
+
+Size with all dependencies, excluding `glibc`:
+
+- xterm - 167 MiB
+- kitty - 221 MiB
+- rxvt-unicode - 240 MiB
+- qterminal - 467 MiB
+- liri-terminal - 503 MiB
+- gtk3 - 718 MiB (vte3, moserial, termite, 
+- vte3 - 719 MiB (gnome-terminal, mate-terminal, lxterminal, guake, pantheon-terminal, xfce4-terminal, terminator, sakura, tilda, tilix)
+- terminology - 854 MiB
+- konsole - 888 MiB (yakuake)
 
 ## xterm, uxterm
 
