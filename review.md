@@ -13,7 +13,7 @@ Programming language breakdown was obtained with [`github-linguist`](https://git
 Size with all dependencies, excluding `glibc`:
 
 - xterm - 167 MiB
-- kitty - 221 MiB
+- kitty - 221 MiB (but doesn't mention `python` which is +321 MiB)
 - rxvt-unicode - 240 MiB
 - qterminal - 467 MiB
 - liri-terminal - 503 MiB
@@ -21,6 +21,11 @@ Size with all dependencies, excluding `glibc`:
 - vte3 - 719 MiB (gnome-terminal, mate-terminal, lxterminal, guake, pantheon-terminal, xfce4-terminal, terminator, sakura, tilda, tilix)
 - terminology - 854 MiB
 - konsole - 888 MiB (yakuake)
+
+## kitty
+
+- LOC: 179,166
+- implementation languages: C (46%), Python (43%), Objective-C (9%), Mathematica (1%)
 
 ## xterm, uxterm
 
