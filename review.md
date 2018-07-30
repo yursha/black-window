@@ -10,9 +10,11 @@ sh> find . -type f -exec grep -Iq . {} \; -and -print0 | xargs -0 wc -l
 
 Programming language breakdown was obtained with [`github-linguist`](https://github.com/github/linguist).
 
-## xterm
+## xterm, uxterm
 
 A vt220 terminal emulator. The standard terminal emulator for the X Window System.
+
+http://invisible-island.net/xterm/
 
 - website: 
 - first release: , last release: 
@@ -20,10 +22,15 @@ A vt220 terminal emulator. The standard terminal emulator for the X Window Syste
 - version control: 
 - LOC: 174,973
 - dependencies:
+    + libutempter
+    + libxaw
+    + libxft
+    + libxkbfile
+    + ncurses
+    + xbitmaps
+    + xorg-luit
 - implementation languages: C (68%), HTML (15%), Roff (11%), Perl (2%)
 - features:
-
-## uxterm
 
 ## xvt
 
@@ -46,7 +53,6 @@ rxvt (acronym for *our extended virtual terminal*)
 - website: http://rxvt.sourceforge.net/
 - first release: 2000, last release: 2001
 - LOC: 80,140
-- dependencies:
 - implementation languages: C (78%), Shell (17%), Makefile (3%)
 
 ## rxvt-unicode (a.k.a. urxvt)
@@ -61,6 +67,16 @@ Unlike the original `rxvt`, `rxvt-unicode` stores all text in Unicode internally
 - version control: CVS
 - LOC: 115,413
 - dependencies:
+    + libnsl
+    + libxft
+    + perl
+    + rxvt-unicode-terminfo
+    + startup-notification
+    + gtk2-perl (optional) - to use the urxvt-tabbed
+    + libnsl (make)
+    + libxft (make)
+    + perl (make)
+    + startup-notification (make)
 - implementation languages: C (89%), Perl (4%), C++ (4%)
 - features:
   + ISO/IEC 14755
