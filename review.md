@@ -22,6 +22,11 @@ Size with all dependencies, excluding `glibc`:
 - terminology - 854 MiB
 - konsole - 888 MiB (yakuake)
 
+## st
+
+- LOC: 6707
+- implementation languages: C (80%), Objective-C (15%), Roff (3%), Makefile (2%)
+
 ## kitty
 
 - LOC: 179,166
