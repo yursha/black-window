@@ -6,20 +6,26 @@ A terminal emulator allows a user to interact with a shell from within a GUI env
 
 ## uxterm
 
+## xvt
+
+X Window System terminal emulator.
+
 ## rxvt
+
+A fork of xvt.
+
+rxvt (acronym for *our extended virtual terminal*)
+
+A color vt102 terminal emulator intended as an `xterm(1)` replacement for users who do not require features such as Tektronix 4014 emulation and [xt](https://en.wikipedia.org/wiki/X_Toolkit_Intrinsics)-style configurability. As a result, rxvt-unicode uses much less memory. `rxvt` options are mostly a subset of `xterm`.
 
 ## rxvt-unicode (a.k.a. urxvt)
 
-Smaller-is-better philosophy.
+A fork of rxvt.
 
-rxvt-unicode (ouR XVT, unicode) - (a VT102 emulator for the X window system)
-
-A color vt102 terminal emulator intended as an `xterm(1)` replacement for users who do not require features such as Tektronix 4014 emulation and toolkit-style configurability. As a result, rxvt-unicode uses much less memory. `urxvt` options are mostly a subset of `xterm`.
+Unlike the original `rxvt`, `rxvt-unicode` stores all text in Unicode internally. `rxvt-unicode` was born was solely because the author couldn't get `mlterm` to use one font for latin1 and another for japanese. 
 
 - website: http://software.schmorp.de/pkg/rxvt-unicode.html
 - started: 2005, first release: , last release:
-- motivation: Unlike the original `rxvt`, `rxvt-unicode` stores all text in Unicode internally. `rxvt-unicode` was born was solely because the author couldn't get `mlterm` to use one font for latin1 and another for japanese. 
-- author: <name>
 - sources: http://cvs.schmorp.de/rxvt-unicode/
 - version control: CVS
 - LOC: 
