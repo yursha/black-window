@@ -10,10 +10,15 @@ A terminal emulator allows a user to interact with a shell from within a GUI env
 
 ## rxvt-unicode (a.k.a. urxvt)
 
+Smaller-is-better philosophy.
+
+rxvt-unicode (ouR XVT, unicode) - (a VT102 emulator for the X window system)
+
+A color vt102 terminal emulator intended as an `xterm(1)` replacement for users who do not require features such as Tektronix 4014 emulation and toolkit-style configurability. As a result, rxvt-unicode uses much less memory. `urxvt` options are mostly a subset of `xterm`.
 
 - website: http://software.schmorp.de/pkg/rxvt-unicode.html
-- started: 2005
-- motivation: Unlike the original rxvt, rxvt-unicode stores all text in Unicode internally. `rxvt-unicode` was born was solely because the author couldn't get mlterm to use one font for latin1 and another for japanese.
+- started: 2005, first release: , last release:
+- motivation: Unlike the original `rxvt`, `rxvt-unicode` stores all text in Unicode internally. `rxvt-unicode` was born was solely because the author couldn't get `mlterm` to use one font for latin1 and another for japanese. 
 - author: <name>
 - sources: http://cvs.schmorp.de/rxvt-unicode/
 - version control: CVS
@@ -24,6 +29,7 @@ A terminal emulator allows a user to interact with a shell from within a GUI env
   + ISO/IEC 14755
   + separate font per script
   + support for X FreeType interface library (XFT)
+  + comes with a client/daemon pair (urxvtd(1) and urxvtc(1)) that lets you open any number of terminal windows from within a single process, which makes startup time very fast and drastically reduces memory usage.
 
 ## gnome-terminal
 
