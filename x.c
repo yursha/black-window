@@ -1703,49 +1703,65 @@ int main(int argc, char **argv, char **envp) {
   xw.isfixed = False;
   win.cursor = cursorshape;
 
-  ARGBEGIN {
-  case 'a':
-    allowaltscreen = 0;
-    break;
-  case 'c':
-    opt_class = EARGF(usage());
-    break;
-  case 'e':
-    if (argc > 0)
-      --argc, ++argv;
-    goto run;
-  case 'f':
-    opt_font = EARGF(usage());
-    break;
-  case 'g':
-    xw.gm = XParseGeometry(EARGF(usage()), &xw.l, &xw.t, &cols, &rows);
-    break;
-  case 'i':
-    xw.isfixed = 1;
-    break;
-  case 'o':
-    opt_io = EARGF(usage());
-    break;
-  case 'l':
-    opt_line = EARGF(usage());
-    break;
-  case 'n':
-    opt_name = EARGF(usage());
-    break;
-  case 't':
-  case 'T':
-    opt_title = EARGF(usage());
-    break;
-  case 'w':
-    opt_embed = EARGF(usage());
-    break;
-  case 'v':
-    die("%s " VERSION "\n", argv0);
-    break;
-  default:
-    usage();
+  for (argv0 = *argv, argv++, argc--;
+       argv[0] && argv[0][0] == '-' && argv[0][1]; argc--, argv++) {
+    char argc_;
+    char **argv_;
+    int brk_;
+    if (argv[0][1] == '-' && argv[0][2] == '\0') {
+      argv++;
+      argc--;
+      break;
+    }
+    int i_;
+    for (i_ = 1, brk_ = 0, argv_ = argv; argv[0][i_] && !brk_; i_++) {
+      if (argv_ != argv)
+        break;
+      argc_ = argv[0][i_];
+      switch (argc_) {
+      case 'a':
+        allowaltscreen = 0;
+        break;
+      case 'c':
+        opt_class = EARGF(usage());
+        break;
+      case 'e':
+        if (argc > 0)
+          --argc, ++argv;
+        goto run;
+      case 'f':
+        opt_font = EARGF(usage());
+        break;
+      case 'g':
+        xw.gm = XParseGeometry(EARGF(usage()), &xw.l, &xw.t, &cols, &rows);
+        break;
+      case 'i':
+        xw.isfixed = 1;
+        break;
+      case 'o':
+        opt_io = EARGF(usage());
+        break;
+      case 'l':
+        opt_line = EARGF(usage());
+        break;
+      case 'n':
+        opt_name = EARGF(usage());
+        break;
+      case 't':
+      case 'T':
+        opt_title = EARGF(usage());
+        break;
+      case 'w':
+        opt_embed = EARGF(usage());
+        break;
+      case 'v':
+        die("%s " VERSION "\n", argv0);
+        break;
+      default:
+        usage();
+      }
+    }
   }
-  ARGEND;
 
 run:
   if (argc > 0) /* eat all remaining arguments */
