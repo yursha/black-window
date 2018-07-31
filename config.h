@@ -36,7 +36,10 @@ char *worddelimiters = " ";
 static unsigned int doubleclicktimeout = 300;
 static unsigned int tripleclicktimeout = 600;
 
-/* alt screens */
+/*
+ * alt screens
+ * https://stackoverflow.com/questions/11023929/using-the-alternate-screen-in-a-bash-script
+ */
 int allowaltscreen = 1;
 
 /* frames per second st should at maximum draw to the screen */
