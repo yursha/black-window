@@ -1729,10 +1729,6 @@ int main(int argc, char **argv, char **envp) {
       case 'c':
         opt_class = EARGF(usage());
         break;
-      case 'e':
-        if (argc > 0)
-          --argc, ++argv;
-        goto run;
       case 'f':
         opt_font = EARGF(usage());
         break;
