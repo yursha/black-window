@@ -202,7 +202,7 @@ static void (*handler[LASTEvent])(XEvent *) = {
 };
 
 /* Globals */
-static DrawingContext dc;
+static DrawingContext drawing_context;
 static XWindow x_window;
 static XSelection xsel;
 static TermWindow win;
@@ -657,16 +657,17 @@ void xloadcols(void) {
   static int loaded;
   Color *cp;
 
-  dc.collen = MAX(LEN(colorname), 256);
-  dc.col = xmalloc(dc.collen * sizeof(Color));
+  drawing_context.collen = MAX(LEN(colorname), 256);
+  drawing_context.col = xmalloc(drawing_context.collen * sizeof(Color));
 
   if (loaded) {
-    for (cp = dc.col; cp < &dc.col[dc.collen]; ++cp)
+    for (cp = drawing_context.col;
+         cp < &drawing_context.col[drawing_context.collen]; ++cp)
       XftColorFree(x_window.dpy, x_window.vis, x_window.cmap, cp);
   }
 
-  for (i = 0; i < dc.collen; i++)
-    if (!xloadcolor(i, NULL, &dc.col[i])) {
+  for (i = 0; i < drawing_context.collen; i++)
+    if (!xloadcolor(i, NULL, &drawing_context.col[i])) {
       if (colorname[i])
         die("could not allocate color '%s'\n", colorname[i]);
       else
@@ -678,14 +679,15 @@ void xloadcols(void) {
 int xsetcolorname(int x, const char *name) {
   Color ncolor;
 
-  if (!BETWEEN(x, 0, dc.collen))
+  if (!BETWEEN(x, 0, drawing_context.collen))
     return 1;
 
   if (!xloadcolor(x, name, &ncolor))
     return 1;
 
-  XftColorFree(x_window.dpy, x_window.vis, x_window.cmap, &dc.col[x]);
-  dc.col[x] = ncolor;
+  XftColorFree(x_window.dpy, x_window.vis, x_window.cmap,
+               &drawing_context.col[x]);
+  drawing_context.col[x] = ncolor;
 
   return 0;
 }
@@ -694,9 +696,10 @@ int xsetcolorname(int x, const char *name) {
  * Absolute coordinates.
  */
 void xclear(int x1, int y1, int x2, int y2) {
-  XftDrawRect(x_window.draw,
-              &dc.col[IS_SET(MODE_REVERSE) ? defaultfg : defaultbg], x1, y1,
-              x2 - x1, y2 - y1);
+  XftDrawRect(
+      x_window.draw,
+      &drawing_context.col[IS_SET(MODE_REVERSE) ? defaultfg : defaultbg], x1,
+      y1, x2 - x1, y2 - y1);
 }
 
 void xhints(void) {
@@ -853,33 +856,34 @@ void xloadfonts(char *fontstr, double fontsize) {
     defaultfontsize = usedfontsize;
   }
 
-  if (xloadfont(&dc.font, pattern))
+  if (xloadfont(&drawing_context.font, pattern))
     die("can't open font %s\n", fontstr);
 
   if (usedfontsize < 0) {
-    FcPatternGetDouble(dc.font.match->pattern, FC_PIXEL_SIZE, 0, &fontval);
+    FcPatternGetDouble(drawing_context.font.match->pattern, FC_PIXEL_SIZE, 0,
+                       &fontval);
     usedfontsize = fontval;
     if (fontsize == 0)
       defaultfontsize = fontval;
   }
 
   /* Setting character width and height. */
-  win.cw = ceilf(dc.font.width * cwscale);
-  win.ch = ceilf(dc.font.height * chscale);
+  win.cw = ceilf(drawing_context.font.width * cwscale);
+  win.ch = ceilf(drawing_context.font.height * chscale);
 
   FcPatternDel(pattern, FC_SLANT);
   FcPatternAddInteger(pattern, FC_SLANT, FC_SLANT_ITALIC);
-  if (xloadfont(&dc.ifont, pattern))
+  if (xloadfont(&drawing_context.ifont, pattern))
     die("can't open font %s\n", fontstr);
 
   FcPatternDel(pattern, FC_WEIGHT);
   FcPatternAddInteger(pattern, FC_WEIGHT, FC_WEIGHT_BOLD);
-  if (xloadfont(&dc.ibfont, pattern))
+  if (xloadfont(&drawing_context.ibfont, pattern))
     die("can't open font %s\n", fontstr);
 
   FcPatternDel(pattern, FC_SLANT);
   FcPatternAddInteger(pattern, FC_SLANT, FC_SLANT_ROMAN);
-  if (xloadfont(&dc.bfont, pattern))
+  if (xloadfont(&drawing_context.bfont, pattern))
     die("can't open font %s\n", fontstr);
 
   FcPatternDestroy(pattern);
@@ -897,10 +901,10 @@ void xunloadfonts(void) {
   while (frclen > 0)
     XftFontClose(x_window.dpy, frc[--frclen].font);
 
-  xunloadfont(&dc.font);
-  xunloadfont(&dc.bfont);
-  xunloadfont(&dc.ifont);
-  xunloadfont(&dc.ibfont);
+  xunloadfont(&drawing_context.font);
+  xunloadfont(&drawing_context.bfont);
+  xunloadfont(&drawing_context.ifont);
+  xunloadfont(&drawing_context.ibfont);
 }
 
 void xinit(int cols, int rows) {
@@ -935,8 +939,8 @@ void xinit(int cols, int rows) {
     x_window.top += DisplayHeight(x_window.dpy, x_window.scr) - win.h - 2;
 
   /* Events */
-  x_window.attrs.background_pixel = dc.col[defaultbg].pixel;
-  x_window.attrs.border_pixel = dc.col[defaultbg].pixel;
+  x_window.attrs.background_pixel = drawing_context.col[defaultbg].pixel;
+  x_window.attrs.border_pixel = drawing_context.col[defaultbg].pixel;
   x_window.attrs.bit_gravity = NorthWestGravity;
   x_window.attrs.event_mask = FocusChangeMask | KeyPressMask | ExposureMask |
                               VisibilityChangeMask | StructureNotifyMask |
@@ -954,11 +958,14 @@ void xinit(int cols, int rows) {
 
   memset(&gcvalues, 0, sizeof(gcvalues));
   gcvalues.graphics_exposures = False;
-  dc.gc = XCreateGC(x_window.dpy, parent, GCGraphicsExposures, &gcvalues);
+  drawing_context.gc =
+      XCreateGC(x_window.dpy, parent, GCGraphicsExposures, &gcvalues);
   x_window.buf = XCreatePixmap(x_window.dpy, x_window.win, win.w, win.h,
                                DefaultDepth(x_window.dpy, x_window.scr));
-  XSetForeground(x_window.dpy, dc.gc, dc.col[defaultbg].pixel);
-  XFillRectangle(x_window.dpy, x_window.buf, dc.gc, 0, 0, win.w, win.h);
+  XSetForeground(x_window.dpy, drawing_context.gc,
+                 drawing_context.col[defaultbg].pixel);
+  XFillRectangle(x_window.dpy, x_window.buf, drawing_context.gc, 0, 0, win.w,
+                 win.h);
 
   /* font spec buffer */
   x_window.specbuf = xmalloc(cols * sizeof(GlyphFontSpec));
@@ -1032,7 +1039,7 @@ int xmakeglyphfontspecs(XftGlyphFontSpec *specs, const Glyph *glyphs, int len,
                         int x, int y) {
   float winx = borderpx + x * win.cw, winy = borderpx + y * win.ch, xp, yp;
   ushort mode, prevmode = USHRT_MAX;
-  Font *font = &dc.font;
+  Font *font = &drawing_context.font;
   int frcflags = FRC_NORMAL;
   float runewidth = win.cw;
   Rune rune;
@@ -1055,17 +1062,17 @@ int xmakeglyphfontspecs(XftGlyphFontSpec *specs, const Glyph *glyphs, int len,
     /* Determine font for glyph if different from previous glyph. */
     if (prevmode != mode) {
       prevmode = mode;
-      font = &dc.font;
+      font = &drawing_context.font;
       frcflags = FRC_NORMAL;
       runewidth = win.cw * ((mode & ATTR_WIDE) ? 2.0f : 1.0f);
       if ((mode & ATTR_ITALIC) && (mode & ATTR_BOLD)) {
-        font = &dc.ibfont;
+        font = &drawing_context.ibfont;
         frcflags = FRC_ITALICBOLD;
       } else if (mode & ATTR_ITALIC) {
-        font = &dc.ifont;
+        font = &drawing_context.ifont;
         frcflags = FRC_ITALIC;
       } else if (mode & ATTR_BOLD) {
-        font = &dc.bfont;
+        font = &drawing_context.bfont;
         frcflags = FRC_BOLD;
       }
       yp = winy + font->ascent;
@@ -1167,10 +1174,10 @@ void xdrawglyphfontspecs(const XftGlyphFontSpec *specs, Glyph base, int len,
 
   /* Fallback on color display for attributes not supported by the font */
   if (base.mode & ATTR_ITALIC && base.mode & ATTR_BOLD) {
-    if (dc.ibfont.badslant || dc.ibfont.badweight)
+    if (drawing_context.ibfont.badslant || drawing_context.ibfont.badweight)
       base.fg = defaultattr;
-  } else if ((base.mode & ATTR_ITALIC && dc.ifont.badslant) ||
-             (base.mode & ATTR_BOLD && dc.bfont.badweight)) {
+  } else if ((base.mode & ATTR_ITALIC && drawing_context.ifont.badslant) ||
+             (base.mode & ATTR_BOLD && drawing_context.bfont.badweight)) {
     base.fg = defaultattr;
   }
 
@@ -1183,7 +1190,7 @@ void xdrawglyphfontspecs(const XftGlyphFontSpec *specs, Glyph base, int len,
                        &truefg);
     fg = &truefg;
   } else {
-    fg = &dc.col[base.fg];
+    fg = &drawing_context.col[base.fg];
   }
 
   if (IS_TRUECOL(base.bg)) {
@@ -1195,16 +1202,16 @@ void xdrawglyphfontspecs(const XftGlyphFontSpec *specs, Glyph base, int len,
                        &truebg);
     bg = &truebg;
   } else {
-    bg = &dc.col[base.bg];
+    bg = &drawing_context.col[base.bg];
   }
 
   /* Change basic system colors [0-7] to bright system colors [8-15] */
   if ((base.mode & ATTR_BOLD_FAINT) == ATTR_BOLD && BETWEEN(base.fg, 0, 7))
-    fg = &dc.col[base.fg + 8];
+    fg = &drawing_context.col[base.fg + 8];
 
   if (IS_SET(MODE_REVERSE)) {
-    if (fg == &dc.col[defaultfg]) {
-      fg = &dc.col[defaultbg];
+    if (fg == &drawing_context.col[defaultfg]) {
+      fg = &drawing_context.col[defaultbg];
     } else {
       colfg.red = ~fg->color.red;
       colfg.green = ~fg->color.green;
@@ -1215,8 +1222,8 @@ void xdrawglyphfontspecs(const XftGlyphFontSpec *specs, Glyph base, int len,
       fg = &revfg;
     }
 
-    if (bg == &dc.col[defaultbg]) {
-      bg = &dc.col[defaultfg];
+    if (bg == &drawing_context.col[defaultbg]) {
+      bg = &drawing_context.col[defaultfg];
     } else {
       colbg.red = ~bg->color.red;
       colbg.green = ~bg->color.green;
@@ -1279,12 +1286,13 @@ void xdrawglyphfontspecs(const XftGlyphFontSpec *specs, Glyph base, int len,
 
   /* Render underline and strikethrough. */
   if (base.mode & ATTR_UNDERLINE) {
-    XftDrawRect(x_window.draw, fg, winx, winy + dc.font.ascent + 1, width, 1);
+    XftDrawRect(x_window.draw, fg, winx, winy + drawing_context.font.ascent + 1,
+                width, 1);
   }
 
   if (base.mode & ATTR_STRUCK) {
-    XftDrawRect(x_window.draw, fg, winx, winy + 2 * dc.font.ascent / 3, width,
-                1);
+    XftDrawRect(x_window.draw, fg, winx,
+                winy + 2 * drawing_context.font.ascent / 3, width, 1);
   }
 
   /* Reset clip to none. */
@@ -1319,10 +1327,10 @@ void xdrawcursor(int cx, int cy, Glyph g, int ox, int oy, Glyph og) {
     g.mode |= ATTR_REVERSE;
     g.bg = defaultfg;
     if (selected(cx, cy)) {
-      drawcol = dc.col[defaultcs];
+      drawcol = drawing_context.col[defaultcs];
       g.fg = defaultrcs;
     } else {
-      drawcol = dc.col[defaultrcs];
+      drawcol = drawing_context.col[defaultrcs];
       g.fg = defaultcs;
     }
   } else {
@@ -1333,7 +1341,7 @@ void xdrawcursor(int cx, int cy, Glyph g, int ox, int oy, Glyph og) {
       g.fg = defaultbg;
       g.bg = defaultcs;
     }
-    drawcol = dc.col[g.bg];
+    drawcol = drawing_context.col[g.bg];
   }
 
   /* draw the new one */
@@ -1419,10 +1427,11 @@ void xdrawline(Line line, int x1, int y1, int x2) {
 }
 
 void xfinishdraw(void) {
-  XCopyArea(x_window.dpy, x_window.buf, x_window.win, dc.gc, 0, 0, win.w, win.h,
-            0, 0);
-  XSetForeground(x_window.dpy, dc.gc,
-                 dc.col[IS_SET(MODE_REVERSE) ? defaultfg : defaultbg].pixel);
+  XCopyArea(x_window.dpy, x_window.buf, x_window.win, drawing_context.gc, 0, 0,
+            win.w, win.h, 0, 0);
+  XSetForeground(
+      x_window.dpy, drawing_context.gc,
+      drawing_context.col[IS_SET(MODE_REVERSE) ? defaultfg : defaultbg].pixel);
 }
 
 void expose(XEvent *ev) { redraw(); }
