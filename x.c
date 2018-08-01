@@ -97,7 +97,7 @@ typedef struct {
   XSetWindowAttributes attrs;
   int scr;
   int isfixed; /* is fixed geometry? */
-  int l, t;    /* left and top offset */
+  int left, top;    /* left and top offset */
   int gm;      /* geometry mask */
 } XWindow;
 
@@ -719,8 +719,8 @@ void xhints(void) {
   }
   if (xw.gm & (XValue | YValue)) {
     sizeh->flags |= USPosition | PWinGravity;
-    sizeh->x = xw.l;
-    sizeh->y = xw.t;
+    sizeh->x = xw.left;
+    sizeh->y = xw.top;
     sizeh->win_gravity = xgeommasktogravity(xw.gm);
   }
 
@@ -925,9 +925,9 @@ void xinit(int cols, int rows) {
   win.w = 2 * borderpx + cols * win.cw;
   win.h = 2 * borderpx + rows * win.ch;
   if (xw.gm & XNegative)
-    xw.l += DisplayWidth(xw.dpy, xw.scr) - win.w - 2;
+    xw.left += DisplayWidth(xw.dpy, xw.scr) - win.w - 2;
   if (xw.gm & YNegative)
-    xw.t += DisplayHeight(xw.dpy, xw.scr) - win.h - 2;
+    xw.top += DisplayHeight(xw.dpy, xw.scr) - win.h - 2;
 
   /* Events */
   xw.attrs.background_pixel = dc.col[defaultbg].pixel;
@@ -940,7 +940,7 @@ void xinit(int cols, int rows) {
 
   if (!(opt_embed && (parent = strtol(opt_embed, NULL, 0))))
     parent = XRootWindow(xw.dpy, xw.scr);
-  xw.win = XCreateWindow(xw.dpy, parent, xw.l, xw.t, win.w, win.h, 0,
+  xw.win = XCreateWindow(xw.dpy, parent, xw.left, xw.top, win.w, win.h, 0,
                          XDefaultDepth(xw.dpy, xw.scr), InputOutput, xw.vis,
                          CWBackPixel | CWBorderPixel | CWBitGravity |
                              CWEventMask | CWColormap,
@@ -1698,7 +1698,7 @@ void usage(void) {
 }
 
 int main(int argc, char **argv, char **envp) {
-  xw.l = xw.t = 0;
+  xw.left = xw.top = 0;
   xw.isfixed = False;
   win.cursor = cursorshape;
 
@@ -1745,7 +1745,7 @@ int main(int argc, char **argv, char **envp) {
           usage();
           abort();
         }
-        xw.gm = XParseGeometry(argv[1], &xw.l, &xw.t, &cols, &rows);
+        xw.gm = XParseGeometry(argv[1], &xw.left, &xw.top, &cols, &rows);
         argc--;
         argv++;
         break;
