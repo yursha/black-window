@@ -16,7 +16,6 @@
 #include <unistd.h>
 
 static char *argv0;
-#include "arg.h"
 #include "st.h"
 #include "win.h"
 
@@ -1714,52 +1713,96 @@ int main(int argc, char **argv, char **envp) {
       break;
     }
 
-    char option;
-    char **argv_;
-    int brk_;
-    int i_;
-    for (i_ = 1, brk_ = 0, argv_ = argv; argv[0][i_] && !brk_; i_++) {
-      if (argv_ != argv)
-        break;
-      option = argv[0][i_];
-      switch (option) {
+    char option = argv[0][1];
+    if (argv[0][2] != '\0') {
+      usage();
+      abort();
+    }
+    switch (option) {
       case 'a':
         allowaltscreen = 0;
         break;
       case 'c':
-        opt_class = EARGF(usage());
+        if (argv[1] == NULL) {
+          usage();
+          abort();
+        }
+        opt_class = argv[1];
+        argc--;
+        argv++;
         break;
       case 'f':
-        opt_font = EARGF(usage());
+        if (argv[1] == NULL) {
+          usage();
+          abort();
+        }
+        opt_font = argv[1];
+        argc--;
+        argv++;
         break;
       case 'g':
-        xw.gm = XParseGeometry(EARGF(usage()), &xw.l, &xw.t, &cols, &rows);
+        if (argv[1] == NULL) {
+          usage();
+          abort();
+        }
+        xw.gm = XParseGeometry(argv[1], &xw.l, &xw.t, &cols, &rows);
+        argc--;
+        argv++;
         break;
       case 'i':
         xw.isfixed = 1;
         break;
       case 'o':
-        opt_io = EARGF(usage());
+        if (argv[1] == NULL) {
+          usage();
+          abort();
+        }
+        opt_io = argv[1];
+        argc--;
+        argv++;
         break;
       case 'l':
-        opt_line = EARGF(usage());
+        if (argv[1] == NULL) {
+          usage();
+          abort();
+        }
+        opt_line = argv[1];
+        argc--;
+        argv++;
         break;
       case 'n':
-        opt_name = EARGF(usage());
+        if (argv[1] == NULL) {
+          usage();
+          abort();
+        }
+        opt_name = argv[1];
+        argc--;
+        argv++;
         break;
       case 't':
       case 'T':
-        opt_title = EARGF(usage());
+        if (argv[1] == NULL) {
+          usage();
+          abort();
+        }
+        opt_title = argv[1];
+        argc--;
+        argv++;
         break;
       case 'w':
-        opt_embed = EARGF(usage());
+        if (argv[1] == NULL) {
+          usage();
+          abort();
+        }
+        opt_embed = argv[1];
+        argc--;
+        argv++;
         break;
       case 'v':
         die("%s " VERSION "\n", argv0);
         break;
       default:
         usage();
-      }
     }
   }
 
