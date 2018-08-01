@@ -124,13 +124,12 @@ typedef struct {
   FcPattern *pattern;
 } Font;
 
-/* Drawing Context */
 typedef struct {
   Color *col;
   size_t collen;
   Font font, bfont, ifont, ibfont;
   GC gc;
-} DC;
+} DrawingContext;
 
 static inline ushort sixd_to_16bit(int);
 static int xmakeglyphfontspecs(XftGlyphFontSpec *, const Glyph *, int, int,
@@ -203,7 +202,7 @@ static void (*handler[LASTEvent])(XEvent *) = {
 };
 
 /* Globals */
-static DC dc;
+static DrawingContext dc;
 static XWindow x_window;
 static XSelection xsel;
 static TermWindow win;
