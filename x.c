@@ -96,9 +96,9 @@ typedef struct {
   Visual *vis;
   XSetWindowAttributes attrs;
   int scr;
-  int isfixed; /* is fixed geometry? */
-  int left, top;    /* left and top offset */
-  int gm;      /* geometry mask */
+  int isfixed;   /* is fixed geometry? */
+  int left, top; /* left and top offset */
+  int gm;        /* geometry mask */
 } XWindow;
 
 typedef struct {
@@ -1718,91 +1718,62 @@ int main(int argc, char **argv, char **envp) {
       usage();
       abort();
     }
+
     switch (option) {
-      case 'a':
-        allowaltscreen = 0;
-        break;
+    case 'a':
+      allowaltscreen = 0;
+      break;
+    case 'i':
+      xw.isfixed = 1;
+      break;
+    case 'v':
+      die("%s " VERSION "\n", argv0);
+      break;
+    case 'c':
+    case 'f':
+    case 'g':
+    case 'o':
+    case 'l':
+    case 'n':
+    case 't':
+    case 'T':
+    case 'w':
+      if (argv[1] == NULL) {
+        usage();
+        abort();
+      }
+      argc--;
+      argv++;
+      switch (option) {
       case 'c':
-        if (argv[1] == NULL) {
-          usage();
-          abort();
-        }
-        opt_class = argv[1];
-        argc--;
-        argv++;
+        opt_class = argv[0];
         break;
       case 'f':
-        if (argv[1] == NULL) {
-          usage();
-          abort();
-        }
-        opt_font = argv[1];
-        argc--;
-        argv++;
+        opt_font = argv[0];
         break;
       case 'g':
-        if (argv[1] == NULL) {
-          usage();
-          abort();
-        }
-        xw.gm = XParseGeometry(argv[1], &xw.left, &xw.top, &cols, &rows);
-        argc--;
-        argv++;
-        break;
-      case 'i':
-        xw.isfixed = 1;
+        xw.gm = XParseGeometry(argv[0], &xw.left, &xw.top, &cols, &rows);
         break;
       case 'o':
-        if (argv[1] == NULL) {
-          usage();
-          abort();
-        }
-        opt_io = argv[1];
-        argc--;
-        argv++;
+        opt_io = argv[0];
         break;
       case 'l':
-        if (argv[1] == NULL) {
-          usage();
-          abort();
-        }
-        opt_line = argv[1];
-        argc--;
-        argv++;
+        opt_line = argv[0];
         break;
       case 'n':
-        if (argv[1] == NULL) {
-          usage();
-          abort();
-        }
-        opt_name = argv[1];
-        argc--;
-        argv++;
+        opt_name = argv[0];
         break;
       case 't':
       case 'T':
-        if (argv[1] == NULL) {
-          usage();
-          abort();
-        }
-        opt_title = argv[1];
-        argc--;
-        argv++;
+        opt_title = argv[0];
         break;
       case 'w':
-        if (argv[1] == NULL) {
-          usage();
-          abort();
-        }
-        opt_embed = argv[1];
-        argc--;
-        argv++;
-        break;
-      case 'v':
-        die("%s " VERSION "\n", argv0);
-        break;
-      default:
-        usage();
+        opt_embed = argv[0];
+      }
+      break;
+    default:
+      usage();
+      abort();
     }
   }
 
