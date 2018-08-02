@@ -1,8 +1,8 @@
+#include <X11/X.h> /* Window, Cursor, Drawable */
 #include <X11/XKBlib.h>
 #include <X11/Xatom.h>
 #include <X11/Xft/Xft.h>
-#include <X11/Xlib.h> /* XSetLocaleModifiers */
-#include <X11/X.h> /* Drawable */
+#include <X11/Xlib.h> /* XGCValues, XSetLocaleModifiers */
 #include <X11/cursorfont.h>
 #include <X11/keysym.h>
 #include <errno.h>
@@ -11,10 +11,10 @@
 #include <locale.h> /* setlocale */
 #include <math.h>
 #include <signal.h>
+#include <stdio.h>
 #include <sys/select.h>
 #include <time.h>
 #include <unistd.h>
-#include <stdio.h>
 
 static char *argv0;
 #include "st.h"
@@ -909,9 +909,10 @@ void xunloadfonts(void) {
 }
 
 void xinit(int cols, int rows) {
+  // X graphic context values
   XGCValues gcvalues;
-  Cursor cursor;
-  Window parent;
+  Cursor cursor_id;
+  Window parent_window_id;
   pid_t thispid = getpid();
   XColor xmousefg, xmousebg;
 
@@ -949,18 +950,18 @@ void xinit(int cols, int rows) {
                               ButtonReleaseMask;
   x_window.attrs.colormap = x_window.cmap;
 
-  if (!(opt_embed && (parent = strtol(opt_embed, NULL, 0))))
-    parent = XRootWindow(x_window.dpy, x_window.scr);
+  if (!(opt_embed && (parent_window_id = strtol(opt_embed, NULL, 0))))
+    parent_window_id = XRootWindow(x_window.dpy, x_window.scr);
   x_window.win = XCreateWindow(
-      x_window.dpy, parent, x_window.left, x_window.top, win.w, win.h, 0,
-      XDefaultDepth(x_window.dpy, x_window.scr), InputOutput, x_window.vis,
+      x_window.dpy, parent_window_id, x_window.left, x_window.top, win.w, win.h,
+      0, XDefaultDepth(x_window.dpy, x_window.scr), InputOutput, x_window.vis,
       CWBackPixel | CWBorderPixel | CWBitGravity | CWEventMask | CWColormap,
       &x_window.attrs);
 
   memset(&gcvalues, 0, sizeof(gcvalues));
   gcvalues.graphics_exposures = False;
   drawing_context.gc =
-      XCreateGC(x_window.dpy, parent, GCGraphicsExposures, &gcvalues);
+      XCreateGC(x_window.dpy, parent_window_id, GCGraphicsExposures, &gcvalues);
   x_window.buf = XCreatePixmap(x_window.dpy, x_window.win, win.w, win.h,
                                DefaultDepth(x_window.dpy, x_window.scr));
   XSetForeground(x_window.dpy, drawing_context.gc,
@@ -993,8 +994,8 @@ void xinit(int cols, int rows) {
     die("XCreateIC failed. Could not obtain input method.\n");
 
   /* white cursor, black outline */
-  cursor = XCreateFontCursor(x_window.dpy, mouseshape);
-  XDefineCursor(x_window.dpy, x_window.win, cursor);
+  cursor_id = XCreateFontCursor(x_window.dpy, mouseshape);
+  XDefineCursor(x_window.dpy, x_window.win, cursor_id);
 
   if (XParseColor(x_window.dpy, x_window.cmap, colorname[mousefg], &xmousefg) ==
       0) {
@@ -1010,7 +1011,7 @@ void xinit(int cols, int rows) {
     xmousebg.blue = 0x0000;
   }
 
-  XRecolorCursor(x_window.dpy, cursor, &xmousefg, &xmousebg);
+  XRecolorCursor(x_window.dpy, cursor_id, &xmousefg, &xmousebg);
 
   x_window.xembed = XInternAtom(x_window.dpy, "_XEMBED", False);
   x_window.wmdeletewin = XInternAtom(x_window.dpy, "WM_DELETE_WINDOW", False);
