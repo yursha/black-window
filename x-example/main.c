@@ -63,8 +63,8 @@ int main() {
 }
 
 void init_x() {
-  // Use environment variable DISPLAY to create the X connection:
-  display = XOpenDisplay((char *)0);
+  // Use environment variable DISPLAY to connect to X server.
+  display = XOpenDisplay(NULL);
 
   screen = DefaultScreen(display);
   unsigned long black = BlackPixel(display, screen);
