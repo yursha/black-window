@@ -3,12 +3,14 @@
  *
  * font: see http://freedesktop.org/software/fontconfig/fontconfig-user.html
  */
-static char *font = "inconsolata:pixelsize=20:antialias=true:autohint=true";
+static char* font = "inconsolata:pixelsize=20:antialias=true:autohint=true";
+
+// More like a padding.
 static int borderpx = 2;
 
 /*
- * What program is execed by st depends of these precedence rules:
- * 1: program passed with -e
+ * What program is exec'ed by st depends of these precedence rules:
+ * 1: program passed on command-line as a positional argument
  * 2: utmp option
  * 3: SHELL environment variable
  * 4: value of shell in /etc/passwd
@@ -132,13 +134,13 @@ static unsigned int cursorshape = 2;
 
 /*
  * Default columns and rows numbers
+ * Must be positive.
  */
-
 static unsigned int cols = 80;
 static unsigned int rows = 24;
 
 /*
- * Default colour and shape of the mouse cursor
+ * Default color and shape of the mouse cursor
  */
 static unsigned int mouseshape = XC_xterm;
 static unsigned int mousefg = 7;

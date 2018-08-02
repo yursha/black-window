@@ -1,4 +1,3 @@
-/* See LICENSE for license details. */
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -16,17 +15,10 @@
 #include <termios.h>
 #include <unistd.h>
 #include <wchar.h>
+#include <pty.h>
 
 #include "st.h"
 #include "win.h"
-
-#if defined(__linux)
-#include <pty.h>
-#elif defined(__OpenBSD__) || defined(__NetBSD__) || defined(__APPLE__)
-#include <util.h>
-#elif defined(__FreeBSD__) || defined(__DragonFly__)
-#include <libutil.h>
-#endif
 
 /* Arbitrary sizes */
 #define UTF_INVALID 0xFFFD
@@ -953,12 +945,6 @@ void treset(void) {
     tclearregion(0, 0, term.col - 1, term.row - 1);
     tswapscreen();
   }
-}
-
-void tnew(int col, int row) {
-  term = (Term){.c = {.attr = {.fg = defaultfg, .bg = defaultbg}}};
-  tresize(col, row);
-  treset();
 }
 
 void tswapscreen(void) {
@@ -2286,6 +2272,12 @@ int twrite(const char *buf, int buflen, int show_ctrl) {
     tputc(u);
   }
   return n;
+}
+
+void terminal_init(int cols, int rows) {
+  term = (Term){.c = {.attr = {.fg = defaultfg, .bg = defaultbg}}};
+  tresize(cols, rows);
+  treset();
 }
 
 void tresize(int col, int row) {

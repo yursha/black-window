@@ -1,4 +1,3 @@
-/* See LICENSE for license details. */
 #include <X11/XKBlib.h>
 #include <X11/Xatom.h>
 #include <X11/Xft/Xft.h>
@@ -9,12 +8,13 @@
 #include <errno.h>
 #include <libgen.h>
 #include <limits.h>
-#include <locale.h>
+#include <locale.h> /* setlocale */
 #include <math.h>
 #include <signal.h>
 #include <sys/select.h>
 #include <time.h>
 #include <unistd.h>
+#include <stdio.h>
 
 static char *argv0;
 #include "st.h"
@@ -1813,11 +1813,22 @@ run:
   if (!opt_title)
     opt_title = (opt_line || !opt_cmd) ? "st" : opt_cmd[0];
 
+  // At program startup locale is set to "C".
+  // We're overriding character classification locale here according to
+  // environment variables. In glibc the following environment variables
+  // are checked in order:
+  //  - LC_ALL
+  //  - LC_CTYPE
+  //  - LANG
+  //
+  // On ArchLinux LANG is usually set to en_US.UTF-8.
   setlocale(LC_CTYPE, "");
+
+  // The only supported modifies is `im` (input method).
+  // Here we explicitly specify implementation-dependent default.
   XSetLocaleModifiers("");
-  cols = MAX(cols, 1);
-  rows = MAX(rows, 1);
-  tnew(cols, rows);
+
+  terminal_init(cols, rows);
   xinit(cols, rows);
   xsetenv();
   selinit();

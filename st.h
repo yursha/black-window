@@ -75,7 +75,7 @@ void sendbreak(const Arg *);
 void toggleprinter(const Arg *);
 
 int tattrset(int);
-void tnew(int, int);
+void terminal_init(int, int);
 void tresize(int, int);
 void tsetdirtattr(int);
 void ttyhangup(void);
