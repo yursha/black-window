@@ -2,7 +2,7 @@
 #include <X11/XKBlib.h>
 #include <X11/Xatom.h>
 #include <X11/Xft/Xft.h>
-#include <X11/Xlib.h> /* XGCValues, XSetLocaleModifiers */
+#include <X11/Xlib.h> /* XColor, XGCValues, XSetLocaleModifiers */
 #include <X11/cursorfont.h>
 #include <X11/keysym.h>
 #include <errno.h>
@@ -14,7 +14,7 @@
 #include <stdio.h>
 #include <sys/select.h>
 #include <time.h>
-#include <unistd.h>
+#include <unistd.h> /* getpid */
 
 static char *argv0;
 #include "st.h"
