@@ -1,8 +1,29 @@
-# st - simple terminal
-# See LICENSE file for copyright and license details.
 .POSIX:
 
-include config.mk
+# st version
+VERSION = 0.8.1
+
+# Customize below to fit your system
+
+# paths
+PREFIX = /usr/local
+MANPREFIX = $(PREFIX)/share/man
+
+X11INC = /usr/include/X11
+X11LIB = /usr/lib
+
+# includes and libs
+INCS = -I$(X11INC) \
+       `pkg-config --cflags fontconfig` \
+       `pkg-config --cflags freetype2`
+LIBS = -L$(X11LIB) -lm -lrt -lX11 -lutil -lXft \
+       `pkg-config --libs fontconfig` \
+       `pkg-config --libs freetype2`
+
+# flags
+CPPFLAGS = -DVERSION=\"$(VERSION)\" -D_XOPEN_SOURCE=600
+STCFLAGS = $(INCS) $(CPPFLAGS) $(CFLAGS)
+STLDFLAGS = $(LIBS) $(LDFLAGS)
 
 SRC = st.c x.c
 OBJ = $(SRC:.c=.o)
@@ -15,16 +36,13 @@ options:
 	@echo "LDFLAGS = $(STLDFLAGS)"
 	@echo "CC      = $(CC)"
 
-config.h:
-	cp config.def.h config.h
-
 .c.o:
 	$(CC) $(STCFLAGS) -c $<
 
 st.o: config.h st.h win.h
 x.o: st.h win.h
 
-$(OBJ): config.h config.mk
+$(OBJ): config.h
 
 st: $(OBJ)
 	$(CC) -o $@ $(OBJ) $(STLDFLAGS)
@@ -34,8 +52,8 @@ clean:
 
 dist: clean
 	mkdir -p st-$(VERSION)
-	cp -R FAQ LICENSE Makefile README config.mk\
-		config.def.h st.info st.1 st.h win.h $(SRC)\
+	cp -R FAQ LICENSE Makefile README\
+		config.h st.info st.1 st.h win.h $(SRC)\
 		st-$(VERSION)
 	tar -cf - st-$(VERSION) | gzip > st-$(VERSION).tar.gz
 	rm -rf st-$(VERSION)
