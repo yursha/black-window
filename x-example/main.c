@@ -4,8 +4,8 @@
 #include <X11/Xlib.h>
 #include <X11/Xos.h>
 #include <X11/Xutil.h>
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h> /* exit */
 
 Display *display;
 int screen;
@@ -56,15 +56,19 @@ int main() {
     if (event.type == MotionNotify && enable_drawing_pointer_motion) {
       int x = event.xmotion.x;
       int y = event.xmotion.y;
-      XSetForeground(display, graphics_context, rand() % event.xbutton.x % 255);
+      // Avoid division by 0 if `event.xbutton.x == 0`.
+      int seed = event.xbutton.x == 0 ? 1 : event.xbutton.x;
+      XSetForeground(display, graphics_context, rand() % seed % 255);
       XDrawPoint(display, window, graphics_context, x, y);
     }
   }
 }
 
 void init_x() {
-  // Use environment variable DISPLAY to connect to X server.
+  // Connect to X server. Use environment variable DISPLAY for address.
   display = XOpenDisplay(NULL);
+  if (!display)
+    exit(1);
 
   screen = DefaultScreen(display);
   unsigned long black = BlackPixel(display, screen);
@@ -72,8 +76,10 @@ void init_x() {
 
   // This window will be have be 200 pixels across and 300 down.
   // It will have the foreground white and background black
-  window = XCreateSimpleWindow(display, DefaultRootWindow(display), 0, 0, 200,
-                               300, 5, white, black);
+  window = XCreateSimpleWindow(display, DefaultRootWindow(display),
+                               /*x-origin=*/0, /*y-origin=*/0, /*width=*/20,
+                               /*height=*/30, /*border-width=*/0,
+                               /*border-color=*/white, /*background=*/black);
 
   // Here is where some properties of the window can be set.
   // The third and fourth items indicate the name which appears
@@ -83,7 +89,9 @@ void init_x() {
                          NULL);
 
   // Determines which types of input are allowed in the input.
-  XSelectInput(display, window, ExposureMask | ButtonPressMask | KeyPressMask | PointerMotionMask);
+  XSelectInput(display, window,
+               ExposureMask | ButtonPressMask | KeyPressMask |
+                   PointerMotionMask);
   graphics_context = XCreateGC(display, window, 0, 0);
   XSetBackground(display, graphics_context, white);
   XSetForeground(display, graphics_context, black);
