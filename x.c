@@ -1613,17 +1613,16 @@ void resize(XEvent *e) {
 }
 
 void run(void) {
-  XEvent event;
-  int w = win.w, h = win.h;
-  fd_set rfd;
-  int xfd = XConnectionNumber(x_window.display); // X connection file descriptor
   int blinkset = 0;
   int dodraw = 0;
-  int xev;
-  struct timespec drawtimeout, *tv = NULL, now, last, lastblink;
+  struct timespec drawtimeout;
+  struct timespec now;
   long deltatime;
 
   /* Waiting for window mapping */
+  XEvent event;
+  int w = win.w;
+  int h = win.h;
   do {
     XNextEvent(x_window.display, &event);
     /*
@@ -1642,21 +1641,27 @@ void run(void) {
   int tty_master_fd = tty_new(opt_slave);
   cresize(w, h);
 
+  struct timespec last;
+  struct timespec lastblink;
   clock_gettime(CLOCK_MONOTONIC, &last);
   lastblink = last;
 
+  int x_fd = XConnectionNumber(x_window.display); // X connection file descriptor
+  fd_set read_fds;
+  int xev;
+  struct timespec *pselect_timeout = NULL;
   for (xev = action_fps;;) {
-    FD_ZERO(&rfd);
-    FD_SET(tty_master_fd, &rfd);
-    FD_SET(xfd, &rfd);
+    FD_ZERO(&read_fds);
+    FD_SET(tty_master_fd, &read_fds);
+    FD_SET(x_fd, &read_fds);
 
-    if (pselect(MAX(xfd, tty_master_fd) + 1, &rfd, NULL, NULL, tv, NULL) < 0) {
+    if (pselect(MAX(x_fd, tty_master_fd) + 1, &read_fds, /*write_fds=*/NULL, /*error_fds=*/NULL, /*timeout=*/pselect_timeout, /*sigmask=*/NULL) < 0) {
       if (errno == EINTR)
         continue;
       die("select failed: %s\n", strerror(errno));
     }
-    if (FD_ISSET(tty_master_fd, &rfd)) {
-      ttyread();
+    if (FD_ISSET(tty_master_fd, &read_fds)) {
+      tty_read();
       if (blinktimeout) {
         blinkset = tattrset(ATTR_BLINK);
         if (!blinkset)
@@ -1664,13 +1669,13 @@ void run(void) {
       }
     }
 
-    if (FD_ISSET(xfd, &rfd))
+    if (FD_ISSET(x_fd, &read_fds))
       xev = action_fps;
 
     clock_gettime(CLOCK_MONOTONIC, &now);
     drawtimeout.tv_sec = 0;
     drawtimeout.tv_nsec = (1000 * 1E6) / x_fps;
-    tv = &drawtimeout;
+    pselect_timeout = &drawtimeout;
 
     dodraw = 0;
     if (blinktimeout && TIMEDIFF(now, lastblink) > blinktimeout) {
@@ -1697,9 +1702,9 @@ void run(void) {
       draw();
       XFlush(x_window.display);
 
-      if (xev && !FD_ISSET(xfd, &rfd))
+      if (xev && !FD_ISSET(x_fd, &read_fds))
         xev--;
-      if (!FD_ISSET(tty_master_fd, &rfd) && !FD_ISSET(xfd, &rfd)) {
+      if (!FD_ISSET(tty_master_fd, &read_fds) && !FD_ISSET(x_fd, &read_fds)) {
         if (blinkset) {
           if (TIMEDIFF(now, lastblink) > blinktimeout) {
             drawtimeout.tv_nsec = 1000;
@@ -1710,7 +1715,7 @@ void run(void) {
           drawtimeout.tv_sec = drawtimeout.tv_nsec / 1E9;
           drawtimeout.tv_nsec %= (long)1E9;
         } else {
-          tv = NULL;
+          pselect_timeout = NULL;
         }
       }
     }
@@ -1761,14 +1766,8 @@ int main(int argc, char **argv, char **envp) {
     case 'v':
       die("%s " VERSION "\n", argv0);
       break;
-    case 'c':
     case 'f':
     case 'g':
-    case 'r':
-    case 'l':
-    case 'n':
-    case 't':
-    case 'T':
     case 'w':
       if (argv[1] == NULL) {
         usage();

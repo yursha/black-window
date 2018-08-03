@@ -34,7 +34,7 @@ static unsigned int tripleclicktimeout = 600;
  */
 int allowaltscreen = 1;
 
-/* frames per second st should at maximum draw to the screen */
+/* frames per second bw should at maximum draw to the screen */
 static unsigned int x_fps = 120;
 static unsigned int action_fps = 30;
 
@@ -56,14 +56,14 @@ static unsigned int cursorthickness = 2;
 static int bellvolume = 0;
 
 /* default TERM value */
-char *termname = "st-256color";
+char *termname = "bw-256color";
 
 /*
  * spaces per tab
  *
  * When you are changing this value, don't forget to adapt the »it« value in
- * the st.info and appropriately install the st.info in the environment where
- * you use this st version.
+ * the bw.info and appropriately install the bw.info in the environment where
+ * you use this bw version.
  *
  *	it#$tabspaces,
  *
@@ -159,9 +159,6 @@ static MouseShortcut mshortcuts[] = {
 static Shortcut shortcuts[] = {
     /* mask                 keysym          function        argument */
     {XK_ANY_MOD, XK_Break, sendbreak, {.i = 0}},
-    {ControlMask, XK_Print, toggleprinter, {.i = 0}},
-    {ShiftMask, XK_Print, printscreen, {.i = 0}},
-    {XK_ANY_MOD, XK_Print, printsel, {.i = 0}},
     {TERMMOD, XK_Prior, zoom, {.f = +1}},
     {TERMMOD, XK_Next, zoom, {.f = -1}},
     {TERMMOD, XK_Home, zoomreset, {.f = 0}},
@@ -173,7 +170,7 @@ static Shortcut shortcuts[] = {
 };
 
 /*
- * Special keys (change & recompile st.info accordingly)
+ * Special keys (change & recompile bw.info accordingly)
  *
  * Mask value:
  * * Use XK_ANY_MOD to match the key no matter modifiers state
@@ -192,7 +189,7 @@ static Shortcut shortcuts[] = {
  * * > 0: crlf mode is enabled
  * * < 0: crlf mode is disabled
  *
- * Be careful with the order of the definitions because st searches in
+ * Be careful with the order of the definitions because bw searches in
  * this table sequentially, so any XK_ANY_MOD must be in the last
  * position for a key.
  */

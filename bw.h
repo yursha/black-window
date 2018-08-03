@@ -69,10 +69,7 @@ void redraw(void);
 void draw(void);
 
 void iso14755(const Arg *);
-void printscreen(const Arg *);
-void printsel(const Arg *);
 void sendbreak(const Arg *);
-void toggleprinter(const Arg *);
 
 int tattrset(int);
 void terminal_init(int, int);
@@ -80,7 +77,7 @@ void tresize(int, int);
 void tsetdirtattr(int);
 void ttyhangup(void);
 int tty_new(char **);
-size_t ttyread(void);
+size_t tty_read(void);
 void ttyresize(int, int);
 void ttywrite(const char *, size_t, int);
 

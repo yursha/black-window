@@ -45,9 +45,8 @@ enum term_mode {
   MODE_ALTSCREEN = 1 << 2,
   MODE_CRLF = 1 << 3,
   MODE_ECHO = 1 << 4,
-  MODE_PRINT = 1 << 5,
-  MODE_UTF8 = 1 << 6,
-  MODE_SIXEL = 1 << 7,
+  MODE_UTF8 = 1 << 5,
+  MODE_SIXEL = 1 << 6,
 };
 
 enum cursor_movement { CURSOR_SAVE, CURSOR_LOAD };
@@ -69,14 +68,14 @@ enum charset {
 };
 
 enum escape_state {
-  ESC_START = 1,
-  ESC_CSI = 2,
+  ESC_START = 1, // Escpase Sequence Start      'ESC'
+  ESC_CSI = 2,   // Control Sequence Introducer '['
   ESC_STR = 4, /* OSC, PM, APC */
   ESC_ALTCHARSET = 8,
   ESC_STR_END = 16, /* a final string was encountered */
   ESC_TEST = 32,    /* Enter in test mode */
   ESC_UTF8 = 64,
-  ESC_DCS = 128,
+  ESC_DCS = 128, // Device Control String       'P'
 };
 
 typedef struct {
@@ -159,7 +158,6 @@ static void strhandle(void);
 static void strparse(void);
 static void strreset(void);
 
-static void tprinter(char *, size_t);
 static void tdumpsel(void);
 static void tdumpline(int);
 static void tdump(void);
@@ -215,7 +213,6 @@ static Term term;
 static Selection sel;
 static CSIEscape csiescseq;
 static STREscape strescseq;
-static int tee_fd = 1;
 static int tty_master_fd;
 static pid_t pid;
 
@@ -223,21 +220,6 @@ static uchar utfbyte[UTF_SIZ + 1] = {0x80, 0, 0xC0, 0xE0, 0xF0};
 static uchar utfmask[UTF_SIZ + 1] = {0xC0, 0x80, 0xE0, 0xF0, 0xF8};
 static Rune utfmin[UTF_SIZ + 1] = {0, 0, 0x80, 0x800, 0x10000};
 static Rune utfmax[UTF_SIZ + 1] = {0x10FFFF, 0x7F, 0x7FF, 0xFFFF, 0x10FFFF};
-
-ssize_t xwrite(int fd, const char *s, size_t len) {
-  size_t aux = len;
-  ssize_t r;
-
-  while (len > 0) {
-    r = write(fd, s, len);
-    if (r < 0)
-      return r;
-    len -= r;
-    s += r;
-  }
-
-  return aux;
-}
 
 void *xmalloc(size_t len) {
   void *p;
@@ -667,7 +649,6 @@ int tty_new(char **slave_args) {
     die("fork failed: %s\n", strerror(errno));
     break;
   case 0:
-    close(tee_fd);
     setsid(); /* create a new process group */
     dup2(slave, 0);
     dup2(slave, 1);
@@ -687,25 +668,23 @@ int tty_new(char **slave_args) {
   return tty_master_fd;
 }
  
-// Read from the shell
-size_t ttyread(void) {
-  static char buf[BUFSIZ];
-  static int buflen = 0;
-  int written;
-  int ret;
+size_t tty_read(void) {
+  static char buffer[BUFSIZ]; // 8192 bytes
+  static int length = 0;
 
   /* append read bytes to unprocessed bytes */
-  if ((ret = read(tty_master_fd, buf + buflen, LEN(buf) - buflen)) < 0)
-    die("couldn't read from shell: %s\n", strerror(errno));
-  buflen += ret;
+  int bytes_read = read(tty_master_fd, buffer + length, LEN(buffer) - length);
+  if (bytes_read < 0)
+    die("couldn't read from slave: %s\n", strerror(errno));
+  length += bytes_read;
 
-  written = twrite(buf, buflen, 0);
-  buflen -= written;
+  int bytes_written = twrite(buffer, length, 0);
+  length -= bytes_written;
   /* keep any uncomplete utf8 char for the next call */
-  if (buflen > 0)
-    memmove(buf, buf + written, buflen);
+  if (length > 0)
+    memmove(buffer, buffer + bytes_written, length);
 
-  return ret;
+  return bytes_read;
 }
 
 void ttywrite(const char *s, size_t n, int may_echo) {
@@ -772,7 +751,7 @@ void ttywriteraw(const char *s, size_t n) {
          * again. Empty it.
          */
         if (n < lim)
-          lim = ttyread();
+          lim = tty_read();
         n -= r;
         s += r;
       } else {
@@ -781,7 +760,7 @@ void ttywriteraw(const char *s, size_t n) {
       }
     }
     if (FD_ISSET(tty_master_fd, &rfd))
-      lim = ttyread();
+      lim = tty_read();
   }
   return;
 
@@ -1411,25 +1390,6 @@ void csihandle(void) {
     DEFAULT(csiescseq.arg[0], 1);
     tmoveto(term.c.x, term.c.y + csiescseq.arg[0]);
     break;
-  case 'i': /* MC -- Media Copy */
-    switch (csiescseq.arg[0]) {
-    case 0:
-      tdump();
-      break;
-    case 1:
-      tdumpline(term.c.y);
-      break;
-    case 2:
-      tdumpsel();
-      break;
-    case 4:
-      term.mode &= ~MODE_PRINT;
-      break;
-    case 5:
-      term.mode |= MODE_PRINT;
-      break;
-    }
-    break;
   case 'c': /* DA -- Device Attributes */
     if (csiescseq.arg[0] == 0)
       ttywrite(vtiden, strlen(vtiden), 0);
@@ -1727,14 +1687,6 @@ void sendbreak(const Arg *arg) {
     perror("Error sending break");
 }
 
-void tprinter(char *s, size_t len) {
-  if (tee_fd != -1 && xwrite(tee_fd, s, len) < 0) {
-    perror("Error writing to output file");
-    close(tee_fd);
-    tee_fd = -1;
-  }
-}
-
 void iso14755(const Arg *arg) {
   FILE *p;
   char *us, *e, codepoint[9], uc[UTF_SIZ];
@@ -1752,41 +1704,6 @@ void iso14755(const Arg *arg) {
     return;
 
   ttywrite(uc, utf8encode(utf32, uc), 1);
-}
-
-void toggleprinter(const Arg *arg) { term.mode ^= MODE_PRINT; }
-
-void printscreen(const Arg *arg) { tdump(); }
-
-void printsel(const Arg *arg) { tdumpsel(); }
-
-void tdumpsel(void) {
-  char *ptr;
-
-  if ((ptr = getsel())) {
-    tprinter(ptr, strlen(ptr));
-    free(ptr);
-  }
-}
-
-void tdumpline(int n) {
-  char buf[UTF_SIZ];
-  Glyph *bp, *end;
-
-  bp = &term.line[n][0];
-  end = &bp[MIN(tlinelen(n), term.col) - 1];
-  if (bp != end || bp->u != ' ') {
-    for (; bp <= end; ++bp)
-      tprinter(buf, utf8encode(bp->u, buf));
-  }
-  tprinter("\n", 1);
-}
-
-void tdump(void) {
-  int i;
-
-  for (i = 0; i < term.row; ++i)
-    tdumpline(i);
 }
 
 void tputtab(int n) {
@@ -2053,9 +1970,6 @@ void tputc(Rune u) {
     }
   }
 
-  if (IS_SET(MODE_PRINT))
-    tprinter(c, len);
-
   /*
    * STR sequence must be checked before anything else
    * because it uses all following characters until it
@@ -2177,19 +2091,19 @@ check_control_code:
   }
 }
 
-int twrite(const char *buf, int buflen, int show_ctrl) {
+int twrite(const char *buffer, int length, int show_ctrl) {
   int charsize;
   Rune u;
-  int n;
 
-  for (n = 0; n < buflen; n += charsize) {
+  int bytes_written;
+  for (bytes_written = 0; bytes_written < length; bytes_written += charsize) {
     if (IS_SET(MODE_UTF8) && !IS_SET(MODE_SIXEL)) {
       /* process a complete utf8 char */
-      charsize = utf8decode(buf + n, &u, buflen - n);
+      charsize = utf8decode(buffer + bytes_written, &u, length - bytes_written);
       if (charsize == 0)
         break;
     } else {
-      u = buf[n] & 0xFF;
+      u = buffer[bytes_written] & 0xFF;
       charsize = 1;
     }
     if (show_ctrl && ISCONTROL(u)) {
@@ -2204,7 +2118,7 @@ int twrite(const char *buf, int buflen, int show_ctrl) {
     }
     tputc(u);
   }
-  return n;
+  return bytes_written;
 }
 
 void terminal_init(int cols, int rows) {
