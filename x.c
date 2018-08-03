@@ -17,7 +17,7 @@
 #include <unistd.h> /* getpid */
 
 static char *argv0;
-#include "st.h"
+#include "bw.h"
 #include "win.h"
 
 /* types used in config.h */
@@ -224,14 +224,9 @@ static char *usedfont = NULL;
 static double usedfontsize = 0;
 static double defaultfontsize = 0;
 
-static char *opt_class = NULL;
-static char **opt_cmd = NULL;
+static char **opt_slave = NULL;
 static char *opt_embed = NULL;
 static char *opt_font = NULL;
-static char *opt_tee = NULL;
-static char *opt_line = NULL;
-static char *opt_name = NULL;
-static char *opt_title = NULL;
 
 static int oldbutton = 3; /* button event on startup: 3 = release */
 
@@ -704,8 +699,7 @@ void xclear(int x1, int y1, int x2, int y2) {
 }
 
 void xhints(void) {
-  XClassHint class = {opt_name ? opt_name : termname,
-                      opt_class ? opt_class : termname};
+  XClassHint class = {termname, termname};
   XWMHints wm = {.flags = InputHint, .input = 1};
   XSizeHints *sizeh;
 
@@ -1396,7 +1390,7 @@ void xsetenv(void) {
 
 void xsettitle(char *p) {
   XTextProperty prop;
-  DEFAULT(p, opt_title);
+  DEFAULT(p, "Black Window");
 
   Xutf8TextListToTextProperty(x_window.display, &p, 1, XUTF8StringStyle, &prop);
   XSetWMName(x_window.display, x_window.win, &prop);
@@ -1645,7 +1639,7 @@ void run(void) {
     }
   } while (event.type != MapNotify);
 
-  int tty_master_fd = tty_new(opt_line, opt_tee, opt_cmd);
+  int tty_master_fd = tty_new(opt_slave);
   cresize(w, h);
 
   clock_gettime(CLOCK_MONOTONIC, &last);
@@ -1783,28 +1777,12 @@ int main(int argc, char **argv, char **envp) {
       argc--;
       argv++;
       switch (option) {
-      case 'c':
-        opt_class = argv[0];
-        break;
       case 'f':
         opt_font = argv[0];
         break;
       case 'g':
         x_window.gm = XParseGeometry(argv[0], &x_window.left, &x_window.top,
                                      &cols, &rows);
-        break;
-      case 'r': // record session
-        opt_tee = argv[0];
-        break;
-      case 'l': // tty line
-        opt_line = argv[0];
-        break;
-      case 'n':
-        opt_name = argv[0];
-        break;
-      case 't':
-      case 'T':
-        opt_title = argv[0];
         break;
       case 'w':
         opt_embed = argv[0];
@@ -1822,10 +1800,7 @@ run:
     abort();
   }
   if (argc > 0) /* eat all remaining arguments */
-    opt_cmd = argv;
-
-  if (!opt_title)
-    opt_title = (opt_line || !opt_cmd) ? "st" : opt_cmd[0];
+    opt_slave = argv;
 
   // At program startup locale is set to "C".
   // We're overriding character classification locale here according to

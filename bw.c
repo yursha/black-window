@@ -17,7 +17,7 @@
 #include <unistd.h>
 #include <wchar.h>
 
-#include "st.h"
+#include "bw.h"
 #include "win.h"
 
 /* Arbitrary sizes */
@@ -215,7 +215,7 @@ static Term term;
 static Selection sel;
 static CSIEscape csiescseq;
 static STREscape strescseq;
-static int iofd = 1;
+static int tee_fd = 1;
 static int tty_master_fd;
 static pid_t pid;
 
@@ -655,25 +655,9 @@ void stty(char **args) {
 }
 
 // Return the file descriptor
-int tty_new(char *line, char *out, char **args) {
+int tty_new(char **slave_args) {
   int master;
   int slave;
-
-  if (out) {
-    term.mode |= MODE_PRINT;
-    iofd = (!strcmp(out, "-")) ? 1 : open(out, O_WRONLY | O_CREAT, 0666);
-    if (iofd < 0) {
-      fprintf(stderr, "Error opening %s:%s\n", out, strerror(errno));
-    }
-  }
-
-  if (line) {
-    if ((tty_master_fd = open(line, O_RDWR)) < 0)
-      die("open line '%s' failed: %s\n", line, strerror(errno));
-    dup2(tty_master_fd, 0);
-    stty(args);
-    return tty_master_fd;
-  }
 
   if (openpty(&master, &slave, NULL, NULL, NULL) < 0)
     die("openpty failed: %s\n", strerror(errno));
@@ -683,7 +667,7 @@ int tty_new(char *line, char *out, char **args) {
     die("fork failed: %s\n", strerror(errno));
     break;
   case 0:
-    close(iofd);
+    close(tee_fd);
     setsid(); /* create a new process group */
     dup2(slave, 0);
     dup2(slave, 1);
@@ -692,7 +676,7 @@ int tty_new(char *line, char *out, char **args) {
       die("ioctl TIOCSCTTY failed: %s\n", strerror(errno));
     close(slave);
     close(master);
-    execvp(args[0], args);
+    execvp(slave_args[0], slave_args);
     break;
   default:
     close(slave);
@@ -1744,10 +1728,10 @@ void sendbreak(const Arg *arg) {
 }
 
 void tprinter(char *s, size_t len) {
-  if (iofd != -1 && xwrite(iofd, s, len) < 0) {
+  if (tee_fd != -1 && xwrite(tee_fd, s, len) < 0) {
     perror("Error writing to output file");
-    close(iofd);
-    iofd = -1;
+    close(tee_fd);
+    tee_fd = -1;
   }
 }
 
