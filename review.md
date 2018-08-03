@@ -24,8 +24,9 @@ Size with all dependencies, excluding `glibc`:
 
 ## scurvy
 
-- LOC: 2142
+- LOC: 2142, depends on libvterm, which is 10,941 LOC
 - implementation languages:C (96%), Meson (4%)
+- features: Wayland support
 
 ## st
 
@@ -126,7 +127,7 @@ https://github.com/GNOME/vte
 
 - first release: 2002, last release: 2018
 - sources: https://github.com/GNOME/vte
-- LOC: 87,651
+- LOC: 86,343
 - dependencies:
     + gnutls
     + gtk3
