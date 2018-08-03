@@ -1622,9 +1622,10 @@ void run(void) {
   XEvent event;
   int w = win.w, h = win.h;
   fd_set rfd;
-  int xfd = XConnectionNumber(x_window.display), blinkset = 0, dodraw = 0;
+  int xfd = XConnectionNumber(x_window.display); // X connection file descriptor
+  int blinkset = 0;
+  int dodraw = 0;
   int xev;
-  int ttyfd;
   struct timespec drawtimeout, *tv = NULL, now, last, lastblink;
   long deltatime;
 
@@ -1644,7 +1645,7 @@ void run(void) {
     }
   } while (event.type != MapNotify);
 
-  ttyfd = ttynew(opt_line, shell, opt_io, opt_cmd);
+  int tty_fd = tty_new(opt_line, opt_io, opt_cmd);
   cresize(w, h);
 
   clock_gettime(CLOCK_MONOTONIC, &last);
@@ -1652,15 +1653,15 @@ void run(void) {
 
   for (xev = action_fps;;) {
     FD_ZERO(&rfd);
-    FD_SET(ttyfd, &rfd);
+    FD_SET(tty_fd, &rfd);
     FD_SET(xfd, &rfd);
 
-    if (pselect(MAX(xfd, ttyfd) + 1, &rfd, NULL, NULL, tv, NULL) < 0) {
+    if (pselect(MAX(xfd, tty_fd) + 1, &rfd, NULL, NULL, tv, NULL) < 0) {
       if (errno == EINTR)
         continue;
       die("select failed: %s\n", strerror(errno));
     }
-    if (FD_ISSET(ttyfd, &rfd)) {
+    if (FD_ISSET(tty_fd, &rfd)) {
       ttyread();
       if (blinktimeout) {
         blinkset = tattrset(ATTR_BLINK);
@@ -1704,7 +1705,7 @@ void run(void) {
 
       if (xev && !FD_ISSET(xfd, &rfd))
         xev--;
-      if (!FD_ISSET(ttyfd, &rfd) && !FD_ISSET(xfd, &rfd)) {
+      if (!FD_ISSET(tty_fd, &rfd) && !FD_ISSET(xfd, &rfd)) {
         if (blinkset) {
           if (TIMEDIFF(now, lastblink) > blinktimeout) {
             drawtimeout.tv_nsec = 1000;
@@ -1795,7 +1796,7 @@ int main(int argc, char **argv, char **envp) {
       case 'o':
         opt_io = argv[0];
         break;
-      case 'l':
+      case 'l': // tty line
         opt_line = argv[0];
         break;
       case 'n':

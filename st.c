@@ -145,7 +145,7 @@ typedef struct {
   int narg; /* nb of args */
 } STREscape;
 
-static void execsh(char *, char **);
+static void execsh(char **);
 static void stty(char **);
 static void sigchld(int);
 static void ttywriteraw(const char *, size_t);
@@ -618,7 +618,7 @@ void die(const char *errstr, ...) {
   exit(1);
 }
 
-void execsh(char *cmd, char **args) {
+void execsh(char **args) {
   char *sh, *prog;
   const struct passwd *pw;
 
@@ -631,12 +631,10 @@ void execsh(char *cmd, char **args) {
   }
 
   if ((sh = getenv("SHELL")) == NULL)
-    sh = (pw->pw_shell[0]) ? pw->pw_shell : cmd;
+    sh = pw->pw_shell;
 
   if (args)
     prog = args[0];
-  else if (utmp)
-    prog = utmp;
   else
     prog = sh;
   DEFAULT(args, ((char *[]){prog, NULL}));
@@ -698,8 +696,10 @@ void stty(char **args) {
     perror("Couldn't call stty");
 }
 
-int ttynew(char *line, char *cmd, char *out, char **args) {
-  int m, s;
+// Return the file descriptor
+int tty_new(char *line, char *out, char **args) {
+  int master;
+  int slave;
 
   if (out) {
     term.mode |= MODE_PRINT;
@@ -718,7 +718,7 @@ int ttynew(char *line, char *cmd, char *out, char **args) {
   }
 
   /* seems to work fine on linux, openbsd and freebsd */
-  if (openpty(&m, &s, NULL, NULL, NULL) < 0)
+  if (openpty(&master, &slave, NULL, NULL, NULL) < 0)
     die("openpty failed: %s\n", strerror(errno));
 
   switch (pid = fork()) {
@@ -728,32 +728,25 @@ int ttynew(char *line, char *cmd, char *out, char **args) {
   case 0:
     close(iofd);
     setsid(); /* create a new process group */
-    dup2(s, 0);
-    dup2(s, 1);
-    dup2(s, 2);
-    if (ioctl(s, TIOCSCTTY, NULL) < 0)
+    dup2(slave, 0);
+    dup2(slave, 1);
+    dup2(slave, 2);
+    if (ioctl(slave, TIOCSCTTY, NULL) < 0)
       die("ioctl TIOCSCTTY failed: %s\n", strerror(errno));
-    close(s);
-    close(m);
-#ifdef __OpenBSD__
-    if (pledge("stdio getpw proc exec", NULL) == -1)
-      die("pledge\n");
-#endif
-    execsh(cmd, args);
+    close(slave);
+    close(master);
+    execsh(args);
     break;
   default:
-#ifdef __OpenBSD__
-    if (pledge("stdio rpath tty proc", NULL) == -1)
-      die("pledge\n");
-#endif
-    close(s);
-    cmdfd = m;
+    close(slave);
+    cmdfd = master;
     signal(SIGCHLD, sigchld);
     break;
   }
   return cmdfd;
 }
-
+ 
+// Read from the shell
 size_t ttyread(void) {
   static char buf[BUFSIZ];
   static int buflen = 0;

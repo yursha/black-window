@@ -1,7 +1,3 @@
-## Why does st not handle utmp entries?
-
-Use the excellent tool of [utmp](http://git.suckless.org/utmp/) for this task.
-
 ## Some _random program_ complains that st is unknown/not recognised/unsupported/whatever!
 
 It means that st doesn’t have any terminfo entry on your system. Chances are
