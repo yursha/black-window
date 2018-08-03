@@ -5,7 +5,7 @@ A terminal emulator allows a user to interact with a shell from within a GUI env
 LOC metric was obtained with the following command (text files only):
 
 ```
-sh> find . -type f -exec grep -Iq . {} \; -and -print0 | xargs -0 wc -l
+sh> find . -path ./.git -prune -o -type f -exec grep -Iq . {} \; -and -print0 | xargs -0 wc -l
 ```
 
 Programming language breakdown was obtained with [`github-linguist`](https://github.com/github/linguist).
@@ -21,6 +21,11 @@ Size with all dependencies, excluding `glibc`:
 - vte3 - 719 MiB (gnome-terminal, mate-terminal, lxterminal, guake, pantheon-terminal, xfce4-terminal, terminator, sakura, tilda, tilix)
 - terminology - 854 MiB
 - konsole - 888 MiB (yakuake)
+
+## scurvy
+
+- LOC: 2142
+- implementation languages:C (96%), Meson (4%)
 
 ## st
 
