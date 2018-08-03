@@ -1727,7 +1727,7 @@ void usage(void) {
   die("usage: %s [-a] [-i] [-v] [-c class] [-f font] [-g geometry]"
       " [-n name] [-o file]\n"
       "          [-T title] [-t title] [-w windowid]"
-      " [command [args ...]]\n"
+      " command [args ...]\n"
       "       %s [-a] [-i] [-v] [-c class] [-f font] [-g geometry]"
       " [-n name] [-o file]\n"
       "          [-T title] [-t title] [-w windowid] -l line"
@@ -1817,6 +1817,10 @@ int main(int argc, char **argv, char **envp) {
   }
 
 run:
+  if (argc == 0) {
+    usage();
+    abort();
+  }
   if (argc > 0) /* eat all remaining arguments */
     opt_cmd = argv;
 

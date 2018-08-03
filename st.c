@@ -145,7 +145,6 @@ typedef struct {
   int narg; /* nb of args */
 } STREscape;
 
-static void execsh(char **);
 static void stty(char **);
 static void sigchld(int);
 static void ttywriteraw(const char *, size_t);
@@ -618,47 +617,6 @@ void die(const char *errstr, ...) {
   exit(1);
 }
 
-void execsh(char **args) {
-  char *sh, *prog;
-  const struct passwd *pw;
-
-  errno = 0;
-  if ((pw = getpwuid(getuid())) == NULL) {
-    if (errno)
-      die("getpwuid: %s\n", strerror(errno));
-    else
-      die("who are you?\n");
-  }
-
-  if ((sh = getenv("SHELL")) == NULL)
-    sh = pw->pw_shell;
-
-  if (args)
-    prog = args[0];
-  else
-    prog = sh;
-  DEFAULT(args, ((char *[]){prog, NULL}));
-
-  unsetenv("COLUMNS");
-  unsetenv("LINES");
-  unsetenv("TERMCAP");
-  setenv("LOGNAME", pw->pw_name, 1);
-  setenv("USER", pw->pw_name, 1);
-  setenv("SHELL", sh, 1);
-  setenv("HOME", pw->pw_dir, 1);
-  setenv("TERM", termname, 1);
-
-  signal(SIGCHLD, SIG_DFL);
-  signal(SIGHUP, SIG_DFL);
-  signal(SIGINT, SIG_DFL);
-  signal(SIGQUIT, SIG_DFL);
-  signal(SIGTERM, SIG_DFL);
-  signal(SIGALRM, SIG_DFL);
-
-  execvp(prog, args);
-  _exit(1);
-}
-
 void sigchld(int a) {
   int stat;
   pid_t p;
@@ -735,7 +693,7 @@ int tty_new(char *line, char *out, char **args) {
       die("ioctl TIOCSCTTY failed: %s\n", strerror(errno));
     close(slave);
     close(master);
-    execsh(args);
+    execvp(args[0], args);
     break;
   default:
     close(slave);
