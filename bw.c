@@ -31,9 +31,12 @@
 /* macros */
 #define IS_SET(flag) ((term.mode & (flag)) != 0)
 #define NUMMAXLEN(x) ((int)(sizeof(x) * 2.56 + 0.5) + 1)
-#define ISCONTROLC0(c) (BETWEEN(c, 0, 0x1f) || (c) == '\177')
-#define ISCONTROLC1(c) (BETWEEN(c, 0x80, 0x9f))
+
+/* https://en.wikipedia.org/wiki/C0_and_C1_control_codes */
+#define ISCONTROLC0(c) (BETWEEN(c, 0, 0x1f) || (c) == '\177') // ISO646 (ASCII)
+#define ISCONTROLC1(c) (BETWEEN(c, 0x80, 0x9f))               // ECMA-48
 #define ISCONTROL(c) (ISCONTROLC0(c) || ISCONTROLC1(c))
+
 #define ISDELIM(u) (utf8strchr(worddelimiters, u) != NULL)
 
 /* constants */
@@ -46,7 +49,6 @@ enum term_mode {
   MODE_CRLF = 1 << 3,
   MODE_ECHO = 1 << 4,
   MODE_UTF8 = 1 << 5,
-  MODE_SIXEL = 1 << 6,
 };
 
 enum cursor_movement { CURSOR_SAVE, CURSOR_LOAD };
@@ -1959,7 +1961,7 @@ void tputc(Rune u) {
   Glyph *gp;
 
   control = ISCONTROL(u);
-  if (!IS_SET(MODE_UTF8) && !IS_SET(MODE_SIXEL)) {
+  if (!IS_SET(MODE_UTF8)) {
     c[0] = u;
     width = len = 1;
   } else {
@@ -1979,21 +1981,9 @@ void tputc(Rune u) {
   if (term.esc & ESC_STR) {
     if (u == '\a' || u == 030 || u == 032 || u == 033 || ISCONTROLC1(u)) {
       term.esc &= ~(ESC_START | ESC_STR | ESC_DCS);
-      if (IS_SET(MODE_SIXEL)) {
-        /* TODO: render sixel */;
-        term.mode &= ~MODE_SIXEL;
-        return;
-      }
       term.esc |= ESC_STR_END;
       goto check_control_code;
     }
-
-    if (IS_SET(MODE_SIXEL)) {
-      /* TODO: implement sixel mode */
-      return;
-    }
-    if (term.esc & ESC_DCS && strescseq.len == 0 && u == 'q')
-      term.mode |= MODE_SIXEL;
 
     if (strescseq.len + len >= sizeof(strescseq.buf) - 1) {
       /*
@@ -2097,7 +2087,7 @@ int twrite(const char *buffer, int length, int show_ctrl) {
 
   int bytes_written;
   for (bytes_written = 0; bytes_written < length; bytes_written += charsize) {
-    if (IS_SET(MODE_UTF8) && !IS_SET(MODE_SIXEL)) {
+    if (IS_SET(MODE_UTF8)) {
       /* process a complete utf8 char */
       charsize = utf8decode(buffer + bytes_written, &u, length - bytes_written);
       if (charsize == 0)

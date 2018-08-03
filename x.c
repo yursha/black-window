@@ -1642,9 +1642,8 @@ void run(void) {
   cresize(w, h);
 
   struct timespec last;
-  struct timespec lastblink;
   clock_gettime(CLOCK_MONOTONIC, &last);
-  lastblink = last;
+  struct timespec lastblink = last;
 
   int x_fd = XConnectionNumber(x_window.display); // X connection file descriptor
   fd_set read_fds;
