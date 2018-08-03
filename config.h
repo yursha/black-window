@@ -3,7 +3,7 @@
  *
  * font: see http://freedesktop.org/software/fontconfig/fontconfig-user.html
  */
-static char* font = "inconsolata:pixelsize=20:antialias=true:autohint=true";
+static char *font = "inconsolata:pixelsize=20:antialias=true:autohint=true";
 
 // More like a padding.
 static int borderpx = 2;
@@ -45,8 +45,8 @@ static unsigned int tripleclicktimeout = 600;
 int allowaltscreen = 1;
 
 /* frames per second st should at maximum draw to the screen */
-static unsigned int xfps = 120;
-static unsigned int actionfps = 30;
+static unsigned int x_fps = 120;
+static unsigned int action_fps = 30;
 
 /*
  * blinking timeout (set to 0 to disable blinking) for the terminal blinking

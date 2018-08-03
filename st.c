@@ -2,6 +2,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <pty.h>
 #include <pwd.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -15,7 +16,6 @@
 #include <termios.h>
 #include <unistd.h>
 #include <wchar.h>
-#include <pty.h>
 
 #include "st.h"
 #include "win.h"
@@ -612,7 +612,6 @@ void selclear(void) {
 
 void die(const char *errstr, ...) {
   va_list ap;
-
   va_start(ap, errstr);
   vfprintf(stderr, errstr, ap);
   va_end(ap);

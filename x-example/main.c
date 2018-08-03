@@ -1,5 +1,8 @@
 // http://math.msu.su/~vvb/2course/Borisenko/CppProjects/GWindow/xintro.html
 // http://math.msu.su/~vvb/2course/Borisenko/CppProjects/GWindow/hi.c
+//
+// Build with:
+// clang -lX11 main.c
 
 #include <X11/Xlib.h>
 #include <X11/Xos.h>
@@ -26,7 +29,7 @@ int main() {
   while (1) {
     // Get the next event and stuff it into our event variable.
     // Note: only events we set the mask for are detected!
-    XNextEvent(display, &event);
+    XNextEvent(display, &event); // blocks
 
     if (event.type == Expose && event.xexpose.count == 0) {
       // The window was exposed redraw it!
@@ -92,7 +95,8 @@ void init_x() {
   XSelectInput(display, window,
                ExposureMask | ButtonPressMask | KeyPressMask |
                    PointerMotionMask);
-  graphics_context = XCreateGC(display, window, 0, 0);
+  graphics_context = XCreateGC(display, window, /*mask of values=*/0,
+                               /*array of values=*/NULL);
   XSetBackground(display, graphics_context, white);
   XSetForeground(display, graphics_context, black);
 
