@@ -228,7 +228,7 @@ static char *opt_class = NULL;
 static char **opt_cmd = NULL;
 static char *opt_embed = NULL;
 static char *opt_font = NULL;
-static char *opt_io = NULL;
+static char *opt_tee = NULL;
 static char *opt_line = NULL;
 static char *opt_name = NULL;
 static char *opt_title = NULL;
@@ -1645,7 +1645,7 @@ void run(void) {
     }
   } while (event.type != MapNotify);
 
-  int tty_fd = tty_new(opt_line, opt_io, opt_cmd);
+  int tty_master_fd = tty_new(opt_line, opt_tee, opt_cmd);
   cresize(w, h);
 
   clock_gettime(CLOCK_MONOTONIC, &last);
@@ -1653,15 +1653,15 @@ void run(void) {
 
   for (xev = action_fps;;) {
     FD_ZERO(&rfd);
-    FD_SET(tty_fd, &rfd);
+    FD_SET(tty_master_fd, &rfd);
     FD_SET(xfd, &rfd);
 
-    if (pselect(MAX(xfd, tty_fd) + 1, &rfd, NULL, NULL, tv, NULL) < 0) {
+    if (pselect(MAX(xfd, tty_master_fd) + 1, &rfd, NULL, NULL, tv, NULL) < 0) {
       if (errno == EINTR)
         continue;
       die("select failed: %s\n", strerror(errno));
     }
-    if (FD_ISSET(tty_fd, &rfd)) {
+    if (FD_ISSET(tty_master_fd, &rfd)) {
       ttyread();
       if (blinktimeout) {
         blinkset = tattrset(ATTR_BLINK);
@@ -1705,7 +1705,7 @@ void run(void) {
 
       if (xev && !FD_ISSET(xfd, &rfd))
         xev--;
-      if (!FD_ISSET(tty_fd, &rfd) && !FD_ISSET(xfd, &rfd)) {
+      if (!FD_ISSET(tty_master_fd, &rfd) && !FD_ISSET(xfd, &rfd)) {
         if (blinkset) {
           if (TIMEDIFF(now, lastblink) > blinktimeout) {
             drawtimeout.tv_nsec = 1000;
@@ -1770,7 +1770,7 @@ int main(int argc, char **argv, char **envp) {
     case 'c':
     case 'f':
     case 'g':
-    case 'o':
+    case 'r':
     case 'l':
     case 'n':
     case 't':
@@ -1793,8 +1793,8 @@ int main(int argc, char **argv, char **envp) {
         x_window.gm = XParseGeometry(argv[0], &x_window.left, &x_window.top,
                                      &cols, &rows);
         break;
-      case 'o':
-        opt_io = argv[0];
+      case 'r': // record session
+        opt_tee = argv[0];
         break;
       case 'l': // tty line
         opt_line = argv[0];
