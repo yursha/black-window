@@ -5,7 +5,7 @@ A terminal emulator allows a user to interact with a shell from within a GUI env
 LOC metric was obtained with the following command (text files only):
 
 ```
-sh> find . -type f -exec grep -Iq . {} \; -and -print0 | xargs -0 wc -l
+sh> find . -path ./.git -prune -o -type f -exec grep -Iq . {} \; -and -print0 | xargs -0 wc -l
 ```
 
 Programming language breakdown was obtained with [`github-linguist`](https://github.com/github/linguist).
@@ -22,10 +22,16 @@ Size with all dependencies, excluding `glibc`:
 - terminology - 854 MiB
 - konsole - 888 MiB (yakuake)
 
-## st
+## [st](http://st.suckless.org/)
 
 - LOC: 6707
 - implementation languages: C (80%), Objective-C (15%), Roff (3%), Makefile (2%)
+
+## [scurvy](https://git.sr.ht/~sircmpwn/scurvy/)
+
+- LOC: 2142, depends on [libvterm](http://www.leonerd.org.uk/code/libvterm/), which is 10,941 LOC
+- implementation languages:C (96%), Meson (4%)
+- features: Wayland support
 
 ## kitty
 
@@ -121,7 +127,7 @@ https://github.com/GNOME/vte
 
 - first release: 2002, last release: 2018
 - sources: https://github.com/GNOME/vte
-- LOC: 87,651
+- LOC: 86,343
 - dependencies:
     + gnutls
     + gtk3
