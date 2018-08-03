@@ -216,7 +216,7 @@ static Selection sel;
 static CSIEscape csiescseq;
 static STREscape strescseq;
 static int iofd = 1;
-static int cmdfd;
+static int tty_master_fd;
 static pid_t pid;
 
 static uchar utfbyte[UTF_SIZ + 1] = {0x80, 0, 0xC0, 0xE0, 0xF0};
@@ -668,14 +668,13 @@ int tty_new(char *line, char *out, char **args) {
   }
 
   if (line) {
-    if ((cmdfd = open(line, O_RDWR)) < 0)
+    if ((tty_master_fd = open(line, O_RDWR)) < 0)
       die("open line '%s' failed: %s\n", line, strerror(errno));
-    dup2(cmdfd, 0);
+    dup2(tty_master_fd, 0);
     stty(args);
-    return cmdfd;
+    return tty_master_fd;
   }
 
-  /* seems to work fine on linux, openbsd and freebsd */
   if (openpty(&master, &slave, NULL, NULL, NULL) < 0)
     die("openpty failed: %s\n", strerror(errno));
 
@@ -697,11 +696,11 @@ int tty_new(char *line, char *out, char **args) {
     break;
   default:
     close(slave);
-    cmdfd = master;
+    tty_master_fd = master;
     signal(SIGCHLD, sigchld);
     break;
   }
-  return cmdfd;
+  return tty_master_fd;
 }
  
 // Read from the shell
@@ -712,7 +711,7 @@ size_t ttyread(void) {
   int ret;
 
   /* append read bytes to unprocessed bytes */
-  if ((ret = read(cmdfd, buf + buflen, LEN(buf) - buflen)) < 0)
+  if ((ret = read(tty_master_fd, buf + buflen, LEN(buf) - buflen)) < 0)
     die("couldn't read from shell: %s\n", strerror(errno));
   buflen += ret;
 
@@ -765,22 +764,22 @@ void ttywriteraw(const char *s, size_t n) {
   while (n > 0) {
     FD_ZERO(&wfd);
     FD_ZERO(&rfd);
-    FD_SET(cmdfd, &wfd);
-    FD_SET(cmdfd, &rfd);
+    FD_SET(tty_master_fd, &wfd);
+    FD_SET(tty_master_fd, &rfd);
 
     /* Check if we can write. */
-    if (pselect(cmdfd + 1, &rfd, &wfd, NULL, NULL, NULL) < 0) {
+    if (pselect(tty_master_fd + 1, &rfd, &wfd, NULL, NULL, NULL) < 0) {
       if (errno == EINTR)
         continue;
       die("select failed: %s\n", strerror(errno));
     }
-    if (FD_ISSET(cmdfd, &wfd)) {
+    if (FD_ISSET(tty_master_fd, &wfd)) {
       /*
        * Only write the bytes written by ttywrite() or the
        * default of 256. This seems to be a reasonable value
        * for a serial line. Bigger values might clog the I/O.
        */
-      if ((r = write(cmdfd, s, (n < lim) ? n : lim)) < 0)
+      if ((r = write(tty_master_fd, s, (n < lim) ? n : lim)) < 0)
         goto write_error;
       if (r < n) {
         /*
@@ -797,7 +796,7 @@ void ttywriteraw(const char *s, size_t n) {
         break;
       }
     }
-    if (FD_ISSET(cmdfd, &rfd))
+    if (FD_ISSET(tty_master_fd, &rfd))
       lim = ttyread();
   }
   return;
@@ -813,7 +812,7 @@ void ttyresize(int tw, int th) {
   w.ws_col = term.col;
   w.ws_xpixel = tw;
   w.ws_ypixel = th;
-  if (ioctl(cmdfd, TIOCSWINSZ, &w) < 0)
+  if (ioctl(tty_master_fd, TIOCSWINSZ, &w) < 0)
     fprintf(stderr, "Couldn't set window size: %s\n", strerror(errno));
 }
 
@@ -1740,7 +1739,7 @@ void strdump(void) {
 void strreset(void) { memset(&strescseq, 0, sizeof(strescseq)); }
 
 void sendbreak(const Arg *arg) {
-  if (tcsendbreak(cmdfd, 0))
+  if (tcsendbreak(tty_master_fd, 0))
     perror("Error sending break");
 }
 
