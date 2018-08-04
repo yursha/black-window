@@ -37,9 +37,6 @@ for further details.
 .B \-i
 will fixate the position given with the -g option.
 .TP
-.BI \-n " name"
-defines the window instance name (default $TERM).
-.TP
 .BI \-w " windowid"
 embeds bw within the window identified by
 .I windowid
@@ -52,18 +49,6 @@ prints version information to stderr, then exits.
 Send a break in the serial line.
 Break key is obtained in PC keyboards
 pressing at the same time control and pause.
-.TP
-.B Ctrl-Print Screen
-Toggle if bw should print to the
-.I iofile.
-.TP
-.B Shift-Print Screen
-Print the full screen to the
-.I iofile.
-.TP
-.B Print Screen
-Print the selection to the
-.I iofile.
 .TP
 .B Ctrl-Shift-Page Up
 Increase font size.
@@ -91,7 +76,7 @@ to bw.
 can be customized by modifying config.h and (re)compiling the source
 code. This keeps it fast, secure and simple.
 .SH DEPENDENCIES
-libxft, xorgproto
+libX11, libfontconfig, libfreetype
 .SH AUTHORS
 See the LICENSE file for the authors.
 .SH LICENSE
