@@ -246,25 +246,24 @@ char *xstrdup(char *s) {
   return s;
 }
 
-size_t utf8decode(const char *c, Rune *u, size_t clen) {
-  size_t i, j, len, type;
-  Rune udecoded;
-
-  *u = UTF_INVALID;
-  if (!clen)
+size_t utf8decode(const char *buffer, Rune *rune, size_t length) {
+  size_t i, j, type;
+  *rune = UTF_INVALID;
+  if (!length)
     return 0;
-  udecoded = utf8decodebyte(c[0], &len);
+  size_t len;
+  Rune udecoded = utf8decodebyte(buffer[0], &len);
   if (!BETWEEN(len, 1, UTF_SIZ))
     return 1;
-  for (i = 1, j = 1; i < clen && j < len; ++i, ++j) {
-    udecoded = (udecoded << 6) | utf8decodebyte(c[i], &type);
+  for (i = 1, j = 1; i < length && j < len; ++i, ++j) {
+    udecoded = (udecoded << 6) | utf8decodebyte(buffer[i], &type);
     if (type != 0)
       return j;
   }
   if (j < len)
     return 0;
-  *u = udecoded;
-  utf8validate(u, len);
+  *rune = udecoded;
+  utf8validate(rune, len);
 
   return len;
 }
@@ -2082,11 +2081,10 @@ check_control_code:
 }
 
 int twrite(const char *buffer, int length, int show_ctrl) {
+  int bytes_written = 0;
   int charsize;
-  Rune u;
-
-  int bytes_written;
-  for (bytes_written = 0; bytes_written < length; bytes_written += charsize) {
+  for (; bytes_written < length; bytes_written += charsize) {
+    Rune u;
     if (IS_SET(MODE_UTF8)) {
       /* process a complete utf8 char */
       charsize = utf8decode(buffer + bytes_written, &u, length - bytes_written);
