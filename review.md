@@ -22,9 +22,13 @@ Size with all dependencies, excluding `glibc`:
 - terminology - 854 MiB
 - konsole - 888 MiB (yakuake)
 
+## Black Window
+
+- LOC: 6,012
+
 ## [st](http://st.suckless.org/)
 
-- LOC: 6707
+- LOC: 6,707
 - implementation languages: C (80%), Objective-C (15%), Roff (3%), Makefile (2%)
 
 ## [scurvy](https://git.sr.ht/~sircmpwn/scurvy/)
