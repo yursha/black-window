@@ -146,5 +146,8 @@ https://github.com/GNOME/vte
     + vala (make)
 - implementation languages: C++ (83%), C (10%), M4 (2%), Vala (1%)
 
+# Terminals which don't depend on X11 or Wayland
 
+- fbterm - 24,289 LOC, C++ (51%), Makefile (28%), Shell (11%), C (10%)
+- kmscon - 106,990 LOC, C (94%), M4 (3%)
 
