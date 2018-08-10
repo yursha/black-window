@@ -72,11 +72,13 @@ static void zoomreset(const Arg *);
 
 /* Purely graphic info */
 typedef struct {
-  int tw, th; /* tty width and height */
-  int w, h;   /* window width and height */
-  int ch;     /* char height */
-  int cw;     /* char width  */
-  int mode;   /* window state/mode flags */
+  int tty_width;
+  int tty_height;
+  int window_width;
+  int window_height;
+  int char_width;
+  int char_height;
+  int mode; /* window state/mode flags */
   int cursor_style;
 } TermWindow;
 
@@ -283,14 +285,14 @@ void zoomreset(const Arg *arg) {
 
 int evcol(XEvent *e) {
   int x = e->xbutton.x - borderpx;
-  LIMIT(x, 0, term_window.tw - 1);
-  return x / term_window.cw;
+  LIMIT(x, 0, term_window.tty_width - 1);
+  return x / term_window.char_width;
 }
 
 int evrow(XEvent *e) {
   int y = e->xbutton.y - borderpx;
-  LIMIT(y, 0, term_window.th - 1);
-  return y / term_window.ch;
+  LIMIT(y, 0, term_window.tty_height - 1);
+  return y / term_window.char_height;
 }
 
 void mousesel(XEvent *e, int done) {
@@ -594,30 +596,31 @@ void cresize(int width, int height) {
   int col, row;
 
   if (width != 0)
-    term_window.w = width;
+    term_window.window_width = width;
   if (height != 0)
-    term_window.h = height;
+    term_window.window_height = height;
 
-  col = (term_window.w - 2 * borderpx) / term_window.cw;
-  row = (term_window.h - 2 * borderpx) / term_window.ch;
+  col = (term_window.window_width - 2 * borderpx) / term_window.char_width;
+  row = (term_window.window_height - 2 * borderpx) / term_window.char_height;
   col = MAX(1, col);
   row = MAX(1, row);
 
   tresize(col, row);
   xresize(col, row);
-  ttyresize(term_window.tw, term_window.th);
+  ttyresize(term_window.tty_width, term_window.tty_height);
 }
 
 void xresize(int col, int row) {
-  term_window.tw = col * term_window.cw;
-  term_window.th = row * term_window.ch;
+  term_window.tty_width = col * term_window.char_width;
+  term_window.tty_height = row * term_window.char_height;
 
   XFreePixmap(x_window.display, x_window.buf);
-  x_window.buf = XCreatePixmap(x_window.display, x_window.window, term_window.w,
-                               term_window.h,
-                               DefaultDepth(x_window.display, x_window.screen));
+  x_window.buf =
+      XCreatePixmap(x_window.display, x_window.window, term_window.window_width,
+                    term_window.window_height,
+                    DefaultDepth(x_window.display, x_window.screen));
   XftDrawChange(x_window.draw, x_window.buf);
-  xclear(0, 0, term_window.w, term_window.h);
+  xclear(0, 0, term_window.window_width, term_window.window_height);
 
   /* resize to new width */
   x_window.specbuf = xrealloc(x_window.specbuf, col * sizeof(XftGlyphFontSpec));
@@ -706,18 +709,18 @@ void xhints(void) {
   sizeh = XAllocSizeHints();
 
   sizeh->flags = PSize | PResizeInc | PBaseSize | PMinSize;
-  sizeh->height = term_window.h;
-  sizeh->width = term_window.w;
-  sizeh->height_inc = term_window.ch;
-  sizeh->width_inc = term_window.cw;
+  sizeh->height = term_window.window_height;
+  sizeh->width = term_window.window_width;
+  sizeh->height_inc = term_window.char_height;
+  sizeh->width_inc = term_window.char_width;
   sizeh->base_height = 2 * borderpx;
   sizeh->base_width = 2 * borderpx;
-  sizeh->min_height = term_window.ch + 2 * borderpx;
-  sizeh->min_width = term_window.cw + 2 * borderpx;
+  sizeh->min_height = term_window.char_height + 2 * borderpx;
+  sizeh->min_width = term_window.char_width + 2 * borderpx;
   if (x_window.isfixed) {
     sizeh->flags |= PMaxSize;
-    sizeh->min_width = sizeh->max_width = term_window.w;
-    sizeh->min_height = sizeh->max_height = term_window.h;
+    sizeh->min_width = sizeh->max_width = term_window.window_width;
+    sizeh->min_height = sizeh->max_height = term_window.window_height;
   }
   if (x_window.gm & (XValue | YValue)) {
     sizeh->flags |= USPosition | PWinGravity;
@@ -864,8 +867,8 @@ void xloadfonts(char *fontstr, double fontsize) {
   }
 
   /* Setting character width and height. */
-  term_window.cw = ceilf(drawing_context.font.width * cwscale);
-  term_window.ch = ceilf(drawing_context.font.height * chscale);
+  term_window.char_width = ceilf(drawing_context.font.width * cwscale);
+  term_window.char_height = ceilf(drawing_context.font.height * chscale);
 
   FcPatternDel(pattern, FC_SLANT);
   FcPatternAddInteger(pattern, FC_SLANT, FC_SLANT_ITALIC);
@@ -929,14 +932,14 @@ void xinit(int cols, int rows) {
   xloadcols();
 
   /* adjust fixed window geometry */
-  term_window.w = 2 * borderpx + cols * term_window.cw;
-  term_window.h = 2 * borderpx + rows * term_window.ch;
+  term_window.window_width = 2 * borderpx + cols * term_window.char_width;
+  term_window.window_height = 2 * borderpx + rows * term_window.char_height;
   if (x_window.gm & XNegative)
-    x_window.left +=
-        DisplayWidth(x_window.display, x_window.screen) - term_window.w - 2;
+    x_window.left += DisplayWidth(x_window.display, x_window.screen) -
+                     term_window.window_width - 2;
   if (x_window.gm & YNegative)
-    x_window.top +=
-        DisplayHeight(x_window.display, x_window.screen) - term_window.h - 2;
+    x_window.top += DisplayHeight(x_window.display, x_window.screen) -
+                    term_window.window_height - 2;
 
   /* Events */
   x_window.attrs.background_pixel = drawing_context.col[defaultbg].pixel;
@@ -952,7 +955,7 @@ void xinit(int cols, int rows) {
     parent_window_id = XRootWindow(x_window.display, x_window.screen);
   x_window.window = XCreateWindow(
       x_window.display, parent_window_id, x_window.left, x_window.top,
-      term_window.w, term_window.h, 0,
+      term_window.window_width, term_window.window_height, 0,
       XDefaultDepth(x_window.display, x_window.screen), InputOutput,
       x_window.visual,
       CWBackPixel | CWBorderPixel | CWBitGravity | CWEventMask | CWColormap,
@@ -962,13 +965,14 @@ void xinit(int cols, int rows) {
   gcvalues.graphics_exposures = False;
   drawing_context.gc = XCreateGC(x_window.display, parent_window_id,
                                  GCGraphicsExposures, &gcvalues);
-  x_window.buf = XCreatePixmap(x_window.display, x_window.window, term_window.w,
-                               term_window.h,
-                               DefaultDepth(x_window.display, x_window.screen));
+  x_window.buf =
+      XCreatePixmap(x_window.display, x_window.window, term_window.window_width,
+                    term_window.window_height,
+                    DefaultDepth(x_window.display, x_window.screen));
   XSetForeground(x_window.display, drawing_context.gc,
                  drawing_context.col[defaultbg].pixel);
   XFillRectangle(x_window.display, x_window.buf, drawing_context.gc, 0, 0,
-                 term_window.w, term_window.h);
+                 term_window.window_width, term_window.window_height);
 
   /* font spec buffer */
   x_window.specbuf = xmalloc(cols * sizeof(XftGlyphFontSpec));
@@ -1042,12 +1046,12 @@ void xinit(int cols, int rows) {
 
 int xmakeglyphfontspecs(XftGlyphFontSpec *specs, const Glyph *glyphs, int len,
                         int x, int y) {
-  float winx = borderpx + x * term_window.cw,
-        winy = borderpx + y * term_window.ch, xp, yp;
+  float winx = borderpx + x * term_window.char_width,
+        winy = borderpx + y * term_window.char_height, xp, yp;
   ushort mode, prevmode = USHRT_MAX;
   Font *font = &drawing_context.font;
   int frcflags = FRC_NORMAL;
-  float runewidth = term_window.cw;
+  float runewidth = term_window.char_width;
   Rune rune;
   FT_UInt glyphidx;
   FcResult fcres;
@@ -1070,7 +1074,7 @@ int xmakeglyphfontspecs(XftGlyphFontSpec *specs, const Glyph *glyphs, int len,
       prevmode = mode;
       font = &drawing_context.font;
       frcflags = FRC_NORMAL;
-      runewidth = term_window.cw * ((mode & ATTR_WIDE) ? 2.0f : 1.0f);
+      runewidth = term_window.char_width * ((mode & ATTR_WIDE) ? 2.0f : 1.0f);
       if ((mode & ATTR_ITALIC) && (mode & ATTR_BOLD)) {
         font = &drawing_context.ibfont;
         frcflags = FRC_ITALICBOLD;
@@ -1172,8 +1176,9 @@ int xmakeglyphfontspecs(XftGlyphFontSpec *specs, const Glyph *glyphs, int len,
 void xdrawglyphfontspecs(const XftGlyphFontSpec *specs, Glyph base, int len,
                          int x, int y) {
   int charlen = len * ((base.mode & ATTR_WIDE) ? 2 : 1);
-  int winx = borderpx + x * term_window.cw,
-      winy = borderpx + y * term_window.ch, width = charlen * term_window.cw;
+  int winx = borderpx + x * term_window.char_width,
+      winy = borderpx + y * term_window.char_height,
+      width = charlen * term_window.char_width;
   XftColor *fg, *bg, *temp, revfg, revbg, truefg, truebg;
   XRenderColor colfg, colbg;
   XRectangle r;
@@ -1266,29 +1271,32 @@ void xdrawglyphfontspecs(const XftGlyphFontSpec *specs, Glyph base, int len,
   /* Intelligent cleaning up of the borders. */
   if (x == 0) {
     xclear(0, (y == 0) ? 0 : winy, borderpx,
-           winy + term_window.ch +
-               ((winy + term_window.ch >= borderpx + term_window.th)
-                    ? term_window.h
+           winy + term_window.char_height +
+               ((winy + term_window.char_height >=
+                 borderpx + term_window.tty_height)
+                    ? term_window.window_height
                     : 0));
   }
-  if (winx + width >= borderpx + term_window.tw) {
-    xclear(winx + width, (y == 0) ? 0 : winy, term_window.w,
-           ((winy + term_window.ch >= borderpx + term_window.th)
-                ? term_window.h
-                : (winy + term_window.ch)));
+  if (winx + width >= borderpx + term_window.tty_width) {
+    xclear(
+        winx + width, (y == 0) ? 0 : winy, term_window.window_width,
+        ((winy + term_window.char_height >= borderpx + term_window.tty_height)
+             ? term_window.window_height
+             : (winy + term_window.char_height)));
   }
   if (y == 0)
     xclear(winx, 0, winx + width, borderpx);
-  if (winy + term_window.ch >= borderpx + term_window.th)
-    xclear(winx, winy + term_window.ch, winx + width, term_window.h);
+  if (winy + term_window.char_height >= borderpx + term_window.tty_height)
+    xclear(winx, winy + term_window.char_height, winx + width,
+           term_window.window_height);
 
   /* Clean up the region we want to draw to. */
-  XftDrawRect(x_window.draw, bg, winx, winy, width, term_window.ch);
+  XftDrawRect(x_window.draw, bg, winx, winy, width, term_window.char_height);
 
   /* Set the clip region because Xft is sometimes dirty. */
   r.x = 0;
   r.y = 0;
-  r.height = term_window.ch;
+  r.height = term_window.char_height;
   r.width = width;
   XftDrawSetClipRectangles(x_window.draw, winx, winy, &r, 1);
 
@@ -1318,13 +1326,14 @@ void xdrawglyph(Glyph g, int x, int y) {
   xdrawglyphfontspecs(&spec, g, numspecs, x, y);
 }
 
-void x_draw_cursor(int cx, int cy, Glyph g, int ox, int oy, Glyph og) {
+void x_draw_cursor(int cursor_x, int cursor_y, Glyph g, int old_cursor_x,
+                   int old_cursor_y, Glyph og) {
   XftColor color;
 
   /* remove the old cursor */
-  if (selected(ox, oy))
+  if (selected(old_cursor_x, old_cursor_y))
     og.mode ^= ATTR_REVERSE;
-  xdrawglyph(og, ox, oy);
+  xdrawglyph(og, old_cursor_x, old_cursor_y);
 
   if (IS_SET(MODE_HIDE))
     return;
@@ -1337,7 +1346,7 @@ void x_draw_cursor(int cx, int cy, Glyph g, int ox, int oy, Glyph og) {
   if (IS_SET(MODE_REVERSE)) {
     g.mode |= ATTR_REVERSE;
     g.bg = defaultfg;
-    if (selected(cx, cy)) {
+    if (selected(cursor_x, cursor_y)) {
       color = drawing_context.col[defaultcs];
       g.fg = defaultrcs;
     } else {
@@ -1345,7 +1354,7 @@ void x_draw_cursor(int cx, int cy, Glyph g, int ox, int oy, Glyph og) {
       g.fg = defaultcs;
     }
   } else {
-    if (selected(cx, cy)) {
+    if (selected(cursor_x, cursor_y)) {
       g.fg = defaultfg;
       g.bg = defaultrcs;
     } else {
@@ -1363,36 +1372,44 @@ void x_draw_cursor(int cx, int cy, Glyph g, int ox, int oy, Glyph og) {
     case 0: /* Blinking Block */
     case 1: /* Blinking Block (Default) */
     case 2: /* Steady Block */
-      xdrawglyph(g, cx, cy);
+      xdrawglyph(g, cursor_x, cursor_y);
       break;
     case 3: /* Blinking Underline */
     case 4: /* Steady Underline */
-      XftDrawRect(x_window.draw, &color, /*x=*/borderpx + cx * term_window.cw,
-                  /*y=*/borderpx + (cy + 1) * term_window.ch - cursorthickness,
-                  /*width=*/term_window.cw, /*height=*/cursorthickness);
+      XftDrawRect(x_window.draw, &color,
+                  /*x=*/borderpx + cursor_x * term_window.char_width,
+                  /*y=*/borderpx + (cursor_y + 1) * term_window.char_height -
+                      cursorthickness,
+                  /*width=*/term_window.char_width, /*height=*/cursorthickness);
       break;
     case 5: /* Blinking bar */
     case 6: /* Steady bar */
-      XftDrawRect(x_window.draw, &color, /*x=*/borderpx + cx * term_window.cw,
-                  /*y=*/borderpx + cy * term_window.ch,
+      XftDrawRect(x_window.draw, &color,
+                  /*x=*/borderpx + cursor_x * term_window.char_width,
+                  /*y=*/borderpx + cursor_y * term_window.char_height,
                   /*width=*/cursorthickness,
-                  /*height=*/term_window.ch);
+                  /*height=*/term_window.char_height);
       break;
     }
   } else {
-    XftDrawRect(x_window.draw, &color, /*x=*/borderpx + cx * term_window.cw,
-                /*y=*/borderpx + cy * term_window.ch,
-                /*width=*/term_window.cw - 1, /*height=*/1);
-    XftDrawRect(x_window.draw, &color, /*x=*/borderpx + cx * term_window.cw,
-                /*y=*/borderpx + cy * term_window.ch, /*width=*/1,
-                /*height=*/term_window.ch - 1);
     XftDrawRect(x_window.draw, &color,
-                /*x=*/borderpx + (cx + 1) * term_window.cw - 1,
-                /*y=*/borderpx + cy * term_window.ch, /*width=*/1,
-                /*height=*/term_window.ch - 1);
-    XftDrawRect(x_window.draw, &color, /*x=*/borderpx + cx * term_window.cw,
-                /*y=*/borderpx + (cy + 1) * term_window.ch - 1,
-                /*width=*/term_window.cw, /*height=*/1);
+                /*x=*/borderpx + cursor_x * term_window.char_width,
+                /*y=*/borderpx + cursor_y * term_window.char_height,
+                /*width=*/term_window.char_width - 1, /*height=*/1);
+    XftDrawRect(x_window.draw, &color,
+                /*x=*/borderpx + cursor_x * term_window.char_width,
+                /*y=*/borderpx + cursor_y * term_window.char_height,
+                /*width=*/1,
+                /*height=*/term_window.char_height - 1);
+    XftDrawRect(x_window.draw, &color,
+                /*x=*/borderpx + (cursor_x + 1) * term_window.char_width - 1,
+                /*y=*/borderpx + cursor_y * term_window.char_height,
+                /*width=*/1,
+                /*height=*/term_window.char_height - 1);
+    XftDrawRect(x_window.draw, &color,
+                /*x=*/borderpx + cursor_x * term_window.char_width,
+                /*y=*/borderpx + (cursor_y + 1) * term_window.char_height - 1,
+                /*width=*/term_window.char_width, /*height=*/1);
   }
 }
 
@@ -1447,7 +1464,7 @@ void xdrawline(Line line, int x1, int y1, int x2) {
 
 void xfinishdraw(void) {
   XCopyArea(x_window.display, x_window.buf, x_window.window, drawing_context.gc,
-            0, 0, term_window.w, term_window.h, 0, 0);
+            0, 0, term_window.window_width, term_window.window_height, 0, 0);
   XSetForeground(
       x_window.display, drawing_context.gc,
       drawing_context.col[IS_SET(MODE_REVERSE) ? defaultfg : defaultbg].pixel);
@@ -1622,8 +1639,8 @@ void cmessage(XEvent *e) {
 }
 
 void resize(XEvent *e) {
-  if (e->xconfigure.width == term_window.w &&
-      e->xconfigure.height == term_window.h)
+  if (e->xconfigure.width == term_window.window_width &&
+      e->xconfigure.height == term_window.window_height)
     return;
 
   cresize(e->xconfigure.width, e->xconfigure.height);
@@ -1638,8 +1655,8 @@ void run(void) {
 
   /* Waiting for window mapping */
   XEvent event;
-  int w = term_window.w;
-  int h = term_window.h;
+  int w = term_window.window_width;
+  int h = term_window.window_height;
   do {
     XNextEvent(x_window.display, &event);
     /*
