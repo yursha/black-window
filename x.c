@@ -16,6 +16,21 @@
 #include <time.h>
 #include <unistd.h> /* getpid */
 
+/*
+
+Black Window is a terminal emulator for X11.
+
+
+X Render Extension (Render)
+
+
+FreeType2
+
+
+Xft
+
+*/
+
 static char *argv0;
 #include "bw.h"
 #include "win.h"
@@ -1620,7 +1635,7 @@ void kpress(XEvent *ev) {
     if (IS_SET(MODE_8BIT)) {
       if (*buf < 0177) {
         c = *buf | 0x80;
-        len = utf8encode(c, buf);
+        len = utf8_encode(c, buf);
       }
     } else {
       buf[1] = buf[0];

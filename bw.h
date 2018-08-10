@@ -87,7 +87,7 @@ void selextend(int, int, int, int);
 int selected(int, int);
 char *getsel(void);
 
-size_t utf8encode(uint32_t, char *);
+size_t utf8_encode(uint32_t, char *);
 
 void *xmalloc(size_t);
 void *xrealloc(void *, size_t);

@@ -22,8 +22,8 @@
 
 /* Arbitrary sizes */
 #define UTF_INVALID 0xFFFD
-#define UTF_SIZ 4
-#define ESC_BUF_SIZ (128 * UTF_SIZ)
+#define UTF8_MAX_CHAR_SIZE 4
+#define ESC_BUF_SIZ (128 * UTF8_MAX_CHAR_SIZE)
 #define ESC_ARG_SIZ 16
 #define STR_BUF_SIZ ESC_BUF_SIZ
 #define STR_ARG_SIZ ESC_ARG_SIZ
@@ -200,11 +200,11 @@ static void selnormalize(void);
 static void selscroll(int, int);
 static void selsnap(int *, int *, int);
 
-static size_t utf8decode(const char *, uint32_t *, size_t);
-static uint32_t utf8decodebyte(char, size_t *);
-static char utf8encodebyte(uint32_t, size_t);
+static size_t utf8_decode(const char *, uint32_t *, size_t);
+static uint32_t utf8_decode_byte(char, size_t *);
+static char utf8_encode_byte(uint32_t, size_t);
 static char *utf8strchr(char *, uint32_t);
-static size_t utf8validate(uint32_t *, size_t);
+static size_t utf8_validate(uint32_t *, size_t);
 
 static char *base64dec(const char *);
 static char base64dec_getc(const char **);
@@ -219,10 +219,11 @@ static STREscape strescseq;
 static int tty_master_fd;
 static pid_t pid;
 
-static uchar utfbyte[UTF_SIZ + 1] = {0x80, 0, 0xC0, 0xE0, 0xF0};
-static uchar utfmask[UTF_SIZ + 1] = {0xC0, 0x80, 0xE0, 0xF0, 0xF8};
-static uint32_t utfmin[UTF_SIZ + 1] = {0, 0, 0x80, 0x800, 0x10000};
-static uint32_t utfmax[UTF_SIZ + 1] = {0x10FFFF, 0x7F, 0x7FF, 0xFFFF, 0x10FFFF};
+static uchar utfbyte[UTF8_MAX_CHAR_SIZE + 1] = {0x80, 0, 0xC0, 0xE0, 0xF0};
+static uchar utfmask[UTF8_MAX_CHAR_SIZE + 1] = {0xC0, 0x80, 0xE0, 0xF0, 0xF8};
+static uint32_t utfmin[UTF8_MAX_CHAR_SIZE + 1] = {0, 0, 0x80, 0x800, 0x10000};
+static uint32_t utfmax[UTF8_MAX_CHAR_SIZE + 1] = {0x10FFFF, 0x7F, 0x7FF, 0xFFFF,
+                                                  0x10FFFF};
 
 void *xmalloc(size_t len) {
   void *p;
@@ -247,29 +248,29 @@ char *xstrdup(char *s) {
   return s;
 }
 
-size_t utf8decode(const char *buffer, uint32_t *rune, size_t length) {
+size_t utf8_decode(const char *buffer, uint32_t *rune, size_t length) {
   size_t i, j, type;
   *rune = UTF_INVALID;
   if (!length)
     return 0;
   size_t len;
-  uint32_t udecoded = utf8decodebyte(buffer[0], &len);
-  if (!BETWEEN(len, 1, UTF_SIZ))
+  uint32_t udecoded = utf8_decode_byte(buffer[0], &len);
+  if (!BETWEEN(len, 1, UTF8_MAX_CHAR_SIZE))
     return 1;
   for (i = 1, j = 1; i < length && j < len; ++i, ++j) {
-    udecoded = (udecoded << 6) | utf8decodebyte(buffer[i], &type);
+    udecoded = (udecoded << 6) | utf8_decode_byte(buffer[i], &type);
     if (type != 0)
       return j;
   }
   if (j < len)
     return 0;
   *rune = udecoded;
-  utf8validate(rune, len);
+  utf8_validate(rune, len);
 
   return len;
 }
 
-uint32_t utf8decodebyte(char c, size_t *i) {
+uint32_t utf8_decode_byte(char c, size_t *i) {
   for (*i = 0; *i < LEN(utfmask); ++(*i))
     if (((uchar)c & utfmask[*i]) == utfbyte[*i])
       return (uchar)c & ~utfmask[*i];
@@ -277,23 +278,23 @@ uint32_t utf8decodebyte(char c, size_t *i) {
   return 0;
 }
 
-size_t utf8encode(uint32_t utf32_code_point, char *c) {
+size_t utf8_encode(uint32_t utf32_code_point, char *c) {
   size_t len, i;
 
-  len = utf8validate(&utf32_code_point, 0);
-  if (len > UTF_SIZ)
+  len = utf8_validate(&utf32_code_point, 0);
+  if (len > UTF8_MAX_CHAR_SIZE)
     return 0;
 
   for (i = len - 1; i != 0; --i) {
-    c[i] = utf8encodebyte(utf32_code_point, 0);
+    c[i] = utf8_encode_byte(utf32_code_point, 0);
     utf32_code_point >>= 6;
   }
-  c[0] = utf8encodebyte(utf32_code_point, len);
+  c[0] = utf8_encode_byte(utf32_code_point, len);
 
   return len;
 }
 
-char utf8encodebyte(uint32_t utf32_code_point, size_t i) {
+char utf8_encode_byte(uint32_t utf32_code_point, size_t i) {
   return utfbyte[i] | (utf32_code_point & ~utfmask[i]);
 }
 
@@ -303,7 +304,7 @@ char *utf8strchr(char *s, uint32_t utf32_code_point) {
 
   len = strlen(s);
   for (i = 0, j = 0; i < len; i += j) {
-    if (!(j = utf8decode(&s[i], &r, len - i)))
+    if (!(j = utf8_decode(&s[i], &r, len - i)))
       break;
     if (r == utf32_code_point)
       return &(s[i]);
@@ -312,7 +313,7 @@ char *utf8strchr(char *s, uint32_t utf32_code_point) {
   return NULL;
 }
 
-size_t utf8validate(uint32_t *utf32_code_point, size_t i) {
+size_t utf8_validate(uint32_t *utf32_code_point, size_t i) {
   if (!BETWEEN(*utf32_code_point, utfmin[i], utfmax[i]) ||
       BETWEEN(*utf32_code_point, 0xD800, 0xDFFF))
     *utf32_code_point = UTF_INVALID;
@@ -545,7 +546,7 @@ char *getsel(void) {
   if (sel.ob.x == -1)
     return NULL;
 
-  bufsize = (terminal.col + 1) * (sel.ne.y - sel.nb.y + 1) * UTF_SIZ;
+  bufsize = (terminal.col + 1) * (sel.ne.y - sel.nb.y + 1) * UTF8_MAX_CHAR_SIZE;
   ptr = str = xmalloc(bufsize);
 
   /* append every set & selected glyph to the selection */
@@ -570,7 +571,7 @@ char *getsel(void) {
       if (gp->mode & ATTR_WDUMMY)
         continue;
 
-      ptr += utf8encode(gp->utf32_code_point, ptr);
+      ptr += utf8_encode(gp->utf32_code_point, ptr);
     }
 
     /*
@@ -1017,7 +1018,8 @@ void tsetchar(uint32_t utf32_code_point, Character *attr, int x, int y) {
    */
   if (terminal.trantbl[terminal.charset] == CS_GRAPHIC0 &&
       BETWEEN(utf32_code_point, 0x41, 0x7e) && vt100_0[utf32_code_point - 0x41])
-    utf8decode(vt100_0[utf32_code_point - 0x41], &utf32_code_point, UTF_SIZ);
+    utf8_decode(vt100_0[utf32_code_point - 0x41], &utf32_code_point,
+                UTF8_MAX_CHAR_SIZE);
 
   if (terminal.line[y][x].mode & ATTR_WIDE) {
     if (x + 1 < terminal.col) {
@@ -1702,7 +1704,7 @@ void sendbreak(const Arg *arg) {
 
 void iso14755(const Arg *arg) {
   FILE *p;
-  char *us, *e, codepoint[9], uc[UTF_SIZ];
+  char *us, *e, codepoint[9], uc[UTF8_MAX_CHAR_SIZE];
   unsigned long utf32;
 
   if (!(p = popen(ISO14755CMD, "r")))
@@ -1716,7 +1718,7 @@ void iso14755(const Arg *arg) {
   if ((utf32 = strtoul(us, &e, 16)) == ULONG_MAX || (*e != '\n' && *e != '\0'))
     return;
 
-  ttywrite(uc, utf8encode(utf32, uc), 1);
+  ttywrite(uc, utf8_encode(utf32, uc), 1);
 }
 
 void tputtab(int n) {
@@ -1966,21 +1968,21 @@ int eschandle(uchar ascii) {
 }
 
 void tputc(uint32_t utf32_code_point) {
-  char c[UTF_SIZ];
-  int control;
-  int width, len;
+  char utf8_char[UTF8_MAX_CHAR_SIZE];
+  int width;
+  int utf8_char_size;
   Character *gp;
 
-  control = ISCONTROL(utf32_code_point);
-  if (!IS_SET(MODE_UTF8)) {
-    c[0] = utf32_code_point;
-    width = len = 1;
-  } else {
-    len = utf8encode(utf32_code_point, c);
-    if (!control && (width = wcwidth(utf32_code_point)) == -1) {
-      memcpy(c, "\357\277\275", 4); /* UTF_INVALID */
+  int is_control_character = ISCONTROL(utf32_code_point);
+  if (terminal.mode & MODE_UTF8) {
+    utf8_char_size = utf8_encode(utf32_code_point, utf8_char);
+    if (!is_control_character && (width = wcwidth(utf32_code_point)) == -1) {
+      memcpy(utf8_char, "\357\277\275", 4); /* UTF_INVALID */
       width = 1;
     }
+  } else {
+    utf8_char[0] = utf32_code_point;
+    width = utf8_char_size = 1;
   }
 
   /*
@@ -1998,7 +2000,7 @@ void tputc(uint32_t utf32_code_point) {
       goto check_control_code;
     }
 
-    if (strescseq.len + len >= sizeof(strescseq.buf) - 1) {
+    if (strescseq.len + utf8_char_size >= sizeof(strescseq.buf) - 1) {
       /*
        * Here is a bug in terminals. If the user never sends
        * some code to stop the str or esc command, then st
@@ -2015,8 +2017,8 @@ void tputc(uint32_t utf32_code_point) {
       return;
     }
 
-    memmove(&strescseq.buf[strescseq.len], c, len);
-    strescseq.len += len;
+    memmove(&strescseq.buf[strescseq.len], utf8_char, utf8_char_size);
+    strescseq.len += utf8_char_size;
     return;
   }
 
@@ -2026,7 +2028,7 @@ check_control_code:
    * because they can be embedded inside a control sequence, and
    * they must not cause conflicts with sequences.
    */
-  if (control) {
+  if (is_control_character) {
     tcontrolcode(utf32_code_point);
     /*
      * control codes are not shown ever
@@ -2103,8 +2105,8 @@ int twrite(const char *buffer, int length, int show_ctrl) {
     uint32_t utf32_code_point;
     if (IS_SET(MODE_UTF8)) {
       /* process a complete utf8 char */
-      charsize = utf8decode(buffer + bytes_written, &utf32_code_point,
-                            length - bytes_written);
+      charsize = utf8_decode(buffer + bytes_written, &utf32_code_point,
+                             length - bytes_written);
       if (charsize == 0)
         break;
     } else {
