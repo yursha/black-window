@@ -72,7 +72,7 @@ enum charset {
 enum escape_state {
   ESC_START = 1, // Escpase Sequence Start      'ESC'
   ESC_CSI = 2,   // Control Sequence Introducer '['
-  ESC_STR = 4, /* OSC, PM, APC */
+  ESC_STR = 4,   /* OSC, PM, APC */
   ESC_ALTCHARSET = 8,
   ESC_STR_END = 16, /* a final string was encountered */
   ESC_TEST = 32,    /* Enter in test mode */
@@ -668,7 +668,7 @@ int tty_new(char **slave_args) {
   }
   return tty_master_fd;
 }
- 
+
 size_t tty_read(void) {
   static char buffer[BUFSIZ]; // 8192 bytes
   static int length = 0;
