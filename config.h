@@ -102,25 +102,17 @@ static const char *colorname[] = {
     /* more colors can be added after 255 to use with DefaultXX */
     "#cccccc",
     "#555555",
+    "#fffacd", // Lemon Chiffon
 };
 
 /*
  * Default colors (colorname index)
  * foreground, background, cursor, reverse cursor
  */
-unsigned int defaultfg = 7;
-unsigned int defaultbg = 0;
+unsigned int defaultfg = 0;
+unsigned int defaultbg = 258;
 static unsigned int defaultcs = 256;
 static unsigned int defaultrcs = 257;
-
-/*
- * Default shape of cursor
- * 2: Block ("█")
- * 4: Underline ("_")
- * 6: Bar ("|")
- * 7: Snowman ("☃")
- */
-static unsigned int cursorshape = 2;
 
 /*
  * Default columns and rows numbers

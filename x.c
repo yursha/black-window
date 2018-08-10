@@ -70,10 +70,6 @@ static void zoomreset(const Arg *);
 #define TRUEGREEN(x) (((x)&0xff00))
 #define TRUEBLUE(x) (((x)&0xff) << 8)
 
-typedef XftDraw *Draw;
-typedef XftColor Color;
-typedef XftGlyphFontSpec GlyphFontSpec;
-
 /* Purely graphic info */
 typedef struct {
   int tw, th; /* tty width and height */
@@ -89,16 +85,16 @@ typedef struct {
   Colormap cmap;
   Window win;
   Drawable buf;
-  GlyphFontSpec *specbuf; /* font spec buffer used for rendering */
+  XftGlyphFontSpec *specbuf; /* font spec buffer used for rendering */
   Atom xembed, wmdeletewin, netwmname, netwmpid;
   XIM xim;
   XIC xic;
-  Draw draw;
+  XftDraw* draw;
   Visual *visual;
   XSetWindowAttributes attrs;
   int screen;
-  int isfixed;   /* is fixed geometry? */
-  int left, top; /* left and top offset */
+  int isfixed;   /* Is fixed geometry? Initialized to 0 (false) as static memory. */
+  int left, top; /* Left and top offsets. Initialized to (0,0) as static memory. */
   int gm;        /* geometry mask */
 } XWindow;
 
@@ -126,7 +122,7 @@ typedef struct {
 } Font;
 
 typedef struct {
-  Color *col;
+  XftColor *col;
   size_t collen;
   Font font, bfont, ifont, ibfont;
   GC gc;
@@ -143,7 +139,7 @@ static void xinit(int, int);
 static void cresize(int, int);
 static void xresize(int, int);
 static void xhints(void);
-static int xloadcolor(int, const char *, Color *);
+static int xloadcolor(int, const char *, XftColor *);
 static int xloadfont(Font *, FcPattern *);
 static void xloadfonts(char *, double);
 static void xunloadfont(Font *);
@@ -620,12 +616,12 @@ void xresize(int col, int row) {
   xclear(0, 0, win.w, win.h);
 
   /* resize to new width */
-  x_window.specbuf = xrealloc(x_window.specbuf, col * sizeof(GlyphFontSpec));
+  x_window.specbuf = xrealloc(x_window.specbuf, col * sizeof(XftGlyphFontSpec));
 }
 
 ushort sixd_to_16bit(int x) { return x == 0 ? 0 : 0x3737 + 0x2828 * x; }
 
-int xloadcolor(int i, const char *name, Color *ncolor) {
+int xloadcolor(int i, const char *name, XftColor *ncolor) {
   XRenderColor color = {.alpha = 0xffff};
 
   if (!name) {
@@ -651,10 +647,10 @@ int xloadcolor(int i, const char *name, Color *ncolor) {
 void xloadcols(void) {
   int i;
   static int loaded;
-  Color *cp;
+  XftColor *cp;
 
   drawing_context.collen = MAX(LEN(colorname), 256);
-  drawing_context.col = xmalloc(drawing_context.collen * sizeof(Color));
+  drawing_context.col = xmalloc(drawing_context.collen * sizeof(XftColor));
 
   if (loaded) {
     for (cp = drawing_context.col;
@@ -673,7 +669,7 @@ void xloadcols(void) {
 }
 
 int xsetcolorname(int x, const char *name) {
-  Color ncolor;
+  XftColor ncolor;
 
   if (!BETWEEN(x, 0, drawing_context.collen))
     return 1;
@@ -969,7 +965,7 @@ void xinit(int cols, int rows) {
                  win.w, win.h);
 
   /* font spec buffer */
-  x_window.specbuf = xmalloc(cols * sizeof(GlyphFontSpec));
+  x_window.specbuf = xmalloc(cols * sizeof(XftGlyphFontSpec));
 
   /* Xft rendering context */
   x_window.draw = XftDrawCreate(x_window.display, x_window.buf, x_window.visual,
@@ -1171,7 +1167,7 @@ void xdrawglyphfontspecs(const XftGlyphFontSpec *specs, Glyph base, int len,
   int charlen = len * ((base.mode & ATTR_WIDE) ? 2 : 1);
   int winx = borderpx + x * win.cw, winy = borderpx + y * win.ch,
       width = charlen * win.cw;
-  Color *fg, *bg, *temp, revfg, revbg, truefg, truebg;
+  XftColor *fg, *bg, *temp, revfg, revbg, truefg, truebg;
   XRenderColor colfg, colbg;
   XRectangle r;
 
@@ -1311,7 +1307,7 @@ void xdrawglyph(Glyph g, int x, int y) {
 }
 
 void xdrawcursor(int cx, int cy, Glyph g, int ox, int oy, Glyph og) {
-  Color drawcol;
+  XftColor drawcol;
 
   /* remove the old cursor */
   if (selected(ox, oy))
@@ -1728,9 +1724,13 @@ void usage(void) {
 }
 
 int main(int argc, char **argv, char **envp) {
-  x_window.left = x_window.top = 0;
-  x_window.isfixed = False;
-  win.cursor = cursorshape;
+  /*
+   * Shape of cursor
+   * 2: Block ("█")
+   * 4: Underline ("_")
+   * 6: Bar ("|")
+   */
+  win.cursor = 2;
 
   // parse optional arguments
   for (argv0 = *argv, argv++, argc--;
