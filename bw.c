@@ -2231,9 +2231,9 @@ void draw(void) {
     cx--;
 
   drawregion(0, 0, terminal.col, terminal.row);
-  xdrawcursor(cx, terminal.cursor.y, terminal.line[terminal.cursor.y][cx],
-              terminal.old_cursor_x, terminal.old_cursor_y,
-              terminal.line[terminal.old_cursor_y][terminal.old_cursor_x]);
+  x_draw_cursor(cx, terminal.cursor.y, terminal.line[terminal.cursor.y][cx],
+                terminal.old_cursor_x, terminal.old_cursor_y,
+                terminal.line[terminal.old_cursor_y][terminal.old_cursor_x]);
   terminal.old_cursor_x = cx, terminal.old_cursor_y = terminal.cursor.y;
   xfinishdraw();
 }

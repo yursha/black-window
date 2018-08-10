@@ -77,7 +77,7 @@ typedef struct {
   int ch;     /* char height */
   int cw;     /* char width  */
   int mode;   /* window state/mode flags */
-  int cursor; /* cursor style */
+  int cursor_style;
 } TermWindow;
 
 typedef struct {
@@ -1318,8 +1318,8 @@ void xdrawglyph(Glyph g, int x, int y) {
   xdrawglyphfontspecs(&spec, g, numspecs, x, y);
 }
 
-void xdrawcursor(int cx, int cy, Glyph g, int ox, int oy, Glyph og) {
-  XftColor drawcol;
+void x_draw_cursor(int cx, int cy, Glyph g, int ox, int oy, Glyph og) {
+  XftColor color;
 
   /* remove the old cursor */
   if (selected(ox, oy))
@@ -1338,10 +1338,10 @@ void xdrawcursor(int cx, int cy, Glyph g, int ox, int oy, Glyph og) {
     g.mode |= ATTR_REVERSE;
     g.bg = defaultfg;
     if (selected(cx, cy)) {
-      drawcol = drawing_context.col[defaultcs];
+      color = drawing_context.col[defaultcs];
       g.fg = defaultrcs;
     } else {
-      drawcol = drawing_context.col[defaultrcs];
+      color = drawing_context.col[defaultrcs];
       g.fg = defaultcs;
     }
   } else {
@@ -1352,12 +1352,12 @@ void xdrawcursor(int cx, int cy, Glyph g, int ox, int oy, Glyph og) {
       g.fg = defaultbg;
       g.bg = defaultcs;
     }
-    drawcol = drawing_context.col[g.bg];
+    color = drawing_context.col[g.bg];
   }
 
   /* draw the new one */
   if (term_window.mode & MODE_FOCUSED) {
-    switch (term_window.cursor) {
+    switch (term_window.cursor_style) {
     case 7: /* st extension: snowman (U+2603) */
       g.u = 0x2603;
     case 0: /* Blinking Block */
@@ -1367,27 +1367,32 @@ void xdrawcursor(int cx, int cy, Glyph g, int ox, int oy, Glyph og) {
       break;
     case 3: /* Blinking Underline */
     case 4: /* Steady Underline */
-      XftDrawRect(x_window.draw, &drawcol, borderpx + cx * term_window.cw,
-                  borderpx + (cy + 1) * term_window.ch - cursorthickness,
-                  term_window.cw, cursorthickness);
+      XftDrawRect(x_window.draw, &color, /*x=*/borderpx + cx * term_window.cw,
+                  /*y=*/borderpx + (cy + 1) * term_window.ch - cursorthickness,
+                  /*width=*/term_window.cw, /*height=*/cursorthickness);
       break;
     case 5: /* Blinking bar */
     case 6: /* Steady bar */
-      XftDrawRect(x_window.draw, &drawcol, borderpx + cx * term_window.cw,
-                  borderpx + cy * term_window.ch, cursorthickness,
-                  term_window.ch);
+      XftDrawRect(x_window.draw, &color, /*x=*/borderpx + cx * term_window.cw,
+                  /*y=*/borderpx + cy * term_window.ch,
+                  /*width=*/cursorthickness,
+                  /*height=*/term_window.ch);
       break;
     }
   } else {
-    XftDrawRect(x_window.draw, &drawcol, borderpx + cx * term_window.cw,
-                borderpx + cy * term_window.ch, term_window.cw - 1, 1);
-    XftDrawRect(x_window.draw, &drawcol, borderpx + cx * term_window.cw,
-                borderpx + cy * term_window.ch, 1, term_window.ch - 1);
-    XftDrawRect(x_window.draw, &drawcol,
-                borderpx + (cx + 1) * term_window.cw - 1,
-                borderpx + cy * term_window.ch, 1, term_window.ch - 1);
-    XftDrawRect(x_window.draw, &drawcol, borderpx + cx * term_window.cw,
-                borderpx + (cy + 1) * term_window.ch - 1, term_window.cw, 1);
+    XftDrawRect(x_window.draw, &color, /*x=*/borderpx + cx * term_window.cw,
+                /*y=*/borderpx + cy * term_window.ch,
+                /*width=*/term_window.cw - 1, /*height=*/1);
+    XftDrawRect(x_window.draw, &color, /*x=*/borderpx + cx * term_window.cw,
+                /*y=*/borderpx + cy * term_window.ch, /*width=*/1,
+                /*height=*/term_window.ch - 1);
+    XftDrawRect(x_window.draw, &color,
+                /*x=*/borderpx + (cx + 1) * term_window.cw - 1,
+                /*y=*/borderpx + cy * term_window.ch, /*width=*/1,
+                /*height=*/term_window.ch - 1);
+    XftDrawRect(x_window.draw, &color, /*x=*/borderpx + cx * term_window.cw,
+                /*y=*/borderpx + (cy + 1) * term_window.ch - 1,
+                /*width=*/term_window.cw, /*height=*/1);
   }
 }
 
@@ -1475,7 +1480,7 @@ int xsetcursor(int cursor) {
   DEFAULT(cursor, 1);
   if (!BETWEEN(cursor, 0, 6))
     return 1;
-  term_window.cursor = cursor;
+  term_window.cursor_style = cursor;
   return 0;
 }
 
@@ -1749,7 +1754,7 @@ int main(int argc, char **argv, char **envp) {
    * 4: Underline ("_")
    * 6: Bar ("|")
    */
-  term_window.cursor = 2;
+  term_window.cursor_style = 2;
 
   // parse optional arguments
   for (argv0 = *argv, argv++, argc--;
