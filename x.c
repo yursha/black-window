@@ -1356,7 +1356,7 @@ void xdrawcursor(int cx, int cy, Glyph g, int ox, int oy, Glyph og) {
   }
 
   /* draw the new one */
-  if (IS_SET(MODE_FOCUSED)) {
+  if (term_window.mode & MODE_FOCUSED) {
     switch (term_window.cursor) {
     case 7: /* st extension: snowman (U+2603) */
       g.u = 0x2603;
