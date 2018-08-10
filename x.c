@@ -133,10 +133,11 @@ typedef struct {
 } DrawingContext;
 
 static inline ushort sixd_to_16bit(int);
-static int xmakeglyphfontspecs(XftGlyphFontSpec *, const Glyph *, int, int,
+static int xmakeglyphfontspecs(XftGlyphFontSpec *, const Character *, int, int,
                                int);
-static void xdrawglyphfontspecs(const XftGlyphFontSpec *, Glyph, int, int, int);
-static void xdrawglyph(Glyph, int, int);
+static void xdrawglyphfontspecs(const XftGlyphFontSpec *, Character, int, int,
+                                int);
+static void xdrawglyph(Character, int, int);
 static void xclear(int, int, int, int);
 static int xgeommasktogravity(int);
 static void xinit(int, int);
@@ -214,7 +215,7 @@ enum { FRC_NORMAL, FRC_ITALIC, FRC_BOLD, FRC_ITALICBOLD };
 typedef struct {
   XftFont *font;
   int flags;
-  Rune unicodep;
+  uint32_t unicodep;
 } Fontcache;
 
 /* Fontcache is an array now. A new font will be appended to the array. */
@@ -1044,15 +1045,15 @@ void xinit(int cols, int rows) {
     xsel.xtarget = XA_STRING;
 }
 
-int xmakeglyphfontspecs(XftGlyphFontSpec *specs, const Glyph *glyphs, int len,
-                        int x, int y) {
+int xmakeglyphfontspecs(XftGlyphFontSpec *specs, const Character *glyphs,
+                        int len, int x, int y) {
   float winx = borderpx + x * term_window.char_width,
         winy = borderpx + y * term_window.char_height, xp, yp;
   ushort mode, prevmode = USHRT_MAX;
   Font *font = &drawing_context.font;
   int frcflags = FRC_NORMAL;
   float runewidth = term_window.char_width;
-  Rune rune;
+  uint32_t rune;
   FT_UInt glyphidx;
   FcResult fcres;
   FcPattern *fcpattern, *fontpattern;
@@ -1062,7 +1063,7 @@ int xmakeglyphfontspecs(XftGlyphFontSpec *specs, const Glyph *glyphs, int len,
 
   for (i = 0, xp = winx, yp = winy + font->ascent; i < len; ++i) {
     /* Fetch rune and mode for current glyph. */
-    rune = glyphs[i].u;
+    rune = glyphs[i].utf32_code_point;
     mode = glyphs[i].mode;
 
     /* Skip dummy wide-character spacing. */
@@ -1173,7 +1174,7 @@ int xmakeglyphfontspecs(XftGlyphFontSpec *specs, const Glyph *glyphs, int len,
   return numspecs;
 }
 
-void xdrawglyphfontspecs(const XftGlyphFontSpec *specs, Glyph base, int len,
+void xdrawglyphfontspecs(const XftGlyphFontSpec *specs, Character base, int len,
                          int x, int y) {
   int charlen = len * ((base.mode & ATTR_WIDE) ? 2 : 1);
   int winx = borderpx + x * term_window.char_width,
@@ -1318,7 +1319,7 @@ void xdrawglyphfontspecs(const XftGlyphFontSpec *specs, Glyph base, int len,
   XftDrawSetClip(x_window.draw, 0);
 }
 
-void xdrawglyph(Glyph g, int x, int y) {
+void xdrawglyph(Character g, int x, int y) {
   int numspecs;
   XftGlyphFontSpec spec;
 
@@ -1326,14 +1327,15 @@ void xdrawglyph(Glyph g, int x, int y) {
   xdrawglyphfontspecs(&spec, g, numspecs, x, y);
 }
 
-void x_draw_cursor(int cursor_x, int cursor_y, Glyph g, int old_cursor_x,
-                   int old_cursor_y, Glyph og) {
+void x_draw_cursor(int cursor_x, int cursor_y, Character cursor_glyph,
+                   int old_cursor_x, int old_cursor_y,
+                   Character old_cursor_glyph) {
   XftColor color;
 
   /* remove the old cursor */
   if (selected(old_cursor_x, old_cursor_y))
-    og.mode ^= ATTR_REVERSE;
-  xdrawglyph(og, old_cursor_x, old_cursor_y);
+    old_cursor_glyph.mode ^= ATTR_REVERSE;
+  xdrawglyph(old_cursor_glyph, old_cursor_x, old_cursor_y);
 
   if (IS_SET(MODE_HIDE))
     return;
@@ -1341,38 +1343,39 @@ void x_draw_cursor(int cursor_x, int cursor_y, Glyph g, int old_cursor_x,
   /*
    * Select the right color for the right mode.
    */
-  g.mode &= ATTR_BOLD | ATTR_ITALIC | ATTR_UNDERLINE | ATTR_STRUCK | ATTR_WIDE;
+  cursor_glyph.mode &=
+      ATTR_BOLD | ATTR_ITALIC | ATTR_UNDERLINE | ATTR_STRUCK | ATTR_WIDE;
 
   if (IS_SET(MODE_REVERSE)) {
-    g.mode |= ATTR_REVERSE;
-    g.bg = defaultfg;
+    cursor_glyph.mode |= ATTR_REVERSE;
+    cursor_glyph.bg = defaultfg;
     if (selected(cursor_x, cursor_y)) {
       color = drawing_context.col[defaultcs];
-      g.fg = defaultrcs;
+      cursor_glyph.fg = defaultrcs;
     } else {
       color = drawing_context.col[defaultrcs];
-      g.fg = defaultcs;
+      cursor_glyph.fg = defaultcs;
     }
   } else {
     if (selected(cursor_x, cursor_y)) {
-      g.fg = defaultfg;
-      g.bg = defaultrcs;
+      cursor_glyph.fg = defaultfg;
+      cursor_glyph.bg = defaultrcs;
     } else {
-      g.fg = defaultbg;
-      g.bg = defaultcs;
+      cursor_glyph.fg = defaultbg;
+      cursor_glyph.bg = defaultcs;
     }
-    color = drawing_context.col[g.bg];
+    color = drawing_context.col[cursor_glyph.bg];
   }
 
   /* draw the new one */
   if (term_window.mode & MODE_FOCUSED) {
     switch (term_window.cursor_style) {
     case 7: /* st extension: snowman (U+2603) */
-      g.u = 0x2603;
+      cursor_glyph.utf32_code_point = 0x2603;
     case 0: /* Blinking Block */
     case 1: /* Blinking Block (Default) */
     case 2: /* Steady Block */
-      xdrawglyph(g, cursor_x, cursor_y);
+      xdrawglyph(cursor_glyph, cursor_x, cursor_y);
       break;
     case 3: /* Blinking Underline */
     case 4: /* Steady Underline */
@@ -1435,7 +1438,7 @@ int xstartdraw(void) { return IS_SET(MODE_VISIBLE); }
 
 void xdrawline(Line line, int x1, int y1, int x2) {
   int i, x, ox, numspecs;
-  Glyph base, new;
+  Character base, new;
   XftGlyphFontSpec *specs = x_window.specbuf;
 
   numspecs = xmakeglyphfontspecs(specs, &line[x1], x2 - x1, x1, y1);
@@ -1580,7 +1583,7 @@ void kpress(XEvent *ev) {
   KeySym ksym;
   char buf[32], *customkey;
   int len;
-  Rune c;
+  uint32_t c;
   Status status;
   Shortcut *bp;
 

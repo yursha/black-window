@@ -37,7 +37,8 @@
 #define ISCONTROLC1(c) (BETWEEN(c, 0x80, 0x9f))               // ECMA-48
 #define ISCONTROL(c) (ISCONTROLC0(c) || ISCONTROLC1(c))
 
-#define ISDELIM(u) (utf8strchr(worddelimiters, u) != NULL)
+#define ISDELIM(utf32_code_point)                                              \
+  (utf8strchr(worddelimiters, utf32_code_point) != NULL)
 
 /* constants */
 #define ISO14755CMD "dmenu -w \"$WINDOWID\" -p codepoint: </dev/null"
@@ -81,7 +82,7 @@ enum escape_state {
 };
 
 typedef struct {
-  Glyph attr; /* current char attributes */
+  Character attr; /* current char attributes */
   int x;
   int y;
   char state;
@@ -174,12 +175,12 @@ static void tmoveto(int, int);
 static void tmoveato(int, int);
 static void tnewline(int);
 static void tputtab(int);
-static void tputc(Rune);
+static void tputc(uint32_t);
 static void treset(void);
 static void tscrollup(int, int);
 static void tscrolldown(int, int);
 static void tsetattr(int *, int);
-static void tsetchar(Rune, Glyph *, int, int);
+static void tsetchar(uint32_t, Character *, int, int);
 static void tsetdirt(int, int);
 static void tsetscroll(int, int);
 static void tswapscreen(void);
@@ -199,11 +200,11 @@ static void selnormalize(void);
 static void selscroll(int, int);
 static void selsnap(int *, int *, int);
 
-static size_t utf8decode(const char *, Rune *, size_t);
-static Rune utf8decodebyte(char, size_t *);
-static char utf8encodebyte(Rune, size_t);
-static char *utf8strchr(char *, Rune);
-static size_t utf8validate(Rune *, size_t);
+static size_t utf8decode(const char *, uint32_t *, size_t);
+static uint32_t utf8decodebyte(char, size_t *);
+static char utf8encodebyte(uint32_t, size_t);
+static char *utf8strchr(char *, uint32_t);
+static size_t utf8validate(uint32_t *, size_t);
 
 static char *base64dec(const char *);
 static char base64dec_getc(const char **);
@@ -220,8 +221,8 @@ static pid_t pid;
 
 static uchar utfbyte[UTF_SIZ + 1] = {0x80, 0, 0xC0, 0xE0, 0xF0};
 static uchar utfmask[UTF_SIZ + 1] = {0xC0, 0x80, 0xE0, 0xF0, 0xF8};
-static Rune utfmin[UTF_SIZ + 1] = {0, 0, 0x80, 0x800, 0x10000};
-static Rune utfmax[UTF_SIZ + 1] = {0x10FFFF, 0x7F, 0x7FF, 0xFFFF, 0x10FFFF};
+static uint32_t utfmin[UTF_SIZ + 1] = {0, 0, 0x80, 0x800, 0x10000};
+static uint32_t utfmax[UTF_SIZ + 1] = {0x10FFFF, 0x7F, 0x7FF, 0xFFFF, 0x10FFFF};
 
 void *xmalloc(size_t len) {
   void *p;
@@ -246,13 +247,13 @@ char *xstrdup(char *s) {
   return s;
 }
 
-size_t utf8decode(const char *buffer, Rune *rune, size_t length) {
+size_t utf8decode(const char *buffer, uint32_t *rune, size_t length) {
   size_t i, j, type;
   *rune = UTF_INVALID;
   if (!length)
     return 0;
   size_t len;
-  Rune udecoded = utf8decodebyte(buffer[0], &len);
+  uint32_t udecoded = utf8decodebyte(buffer[0], &len);
   if (!BETWEEN(len, 1, UTF_SIZ))
     return 1;
   for (i = 1, j = 1; i < length && j < len; ++i, ++j) {
@@ -268,7 +269,7 @@ size_t utf8decode(const char *buffer, Rune *rune, size_t length) {
   return len;
 }
 
-Rune utf8decodebyte(char c, size_t *i) {
+uint32_t utf8decodebyte(char c, size_t *i) {
   for (*i = 0; *i < LEN(utfmask); ++(*i))
     if (((uchar)c & utfmask[*i]) == utfbyte[*i])
       return (uchar)c & ~utfmask[*i];
@@ -276,43 +277,46 @@ Rune utf8decodebyte(char c, size_t *i) {
   return 0;
 }
 
-size_t utf8encode(Rune u, char *c) {
+size_t utf8encode(uint32_t utf32_code_point, char *c) {
   size_t len, i;
 
-  len = utf8validate(&u, 0);
+  len = utf8validate(&utf32_code_point, 0);
   if (len > UTF_SIZ)
     return 0;
 
   for (i = len - 1; i != 0; --i) {
-    c[i] = utf8encodebyte(u, 0);
-    u >>= 6;
+    c[i] = utf8encodebyte(utf32_code_point, 0);
+    utf32_code_point >>= 6;
   }
-  c[0] = utf8encodebyte(u, len);
+  c[0] = utf8encodebyte(utf32_code_point, len);
 
   return len;
 }
 
-char utf8encodebyte(Rune u, size_t i) { return utfbyte[i] | (u & ~utfmask[i]); }
+char utf8encodebyte(uint32_t utf32_code_point, size_t i) {
+  return utfbyte[i] | (utf32_code_point & ~utfmask[i]);
+}
 
-char *utf8strchr(char *s, Rune u) {
-  Rune r;
+char *utf8strchr(char *s, uint32_t utf32_code_point) {
+  uint32_t r;
   size_t i, j, len;
 
   len = strlen(s);
   for (i = 0, j = 0; i < len; i += j) {
     if (!(j = utf8decode(&s[i], &r, len - i)))
       break;
-    if (r == u)
+    if (r == utf32_code_point)
       return &(s[i]);
   }
 
   return NULL;
 }
 
-size_t utf8validate(Rune *u, size_t i) {
-  if (!BETWEEN(*u, utfmin[i], utfmax[i]) || BETWEEN(*u, 0xD800, 0xDFFF))
-    *u = UTF_INVALID;
-  for (i = 1; *u > utfmax[i]; ++i)
+size_t utf8validate(uint32_t *utf32_code_point, size_t i) {
+  if (!BETWEEN(*utf32_code_point, utfmin[i], utfmax[i]) ||
+      BETWEEN(*utf32_code_point, 0xD800, 0xDFFF))
+    *utf32_code_point = UTF_INVALID;
+  for (i = 1; *utf32_code_point > utfmax[i]; ++i)
     ;
 
   return i;
@@ -377,7 +381,7 @@ int tlinelen(int y) {
   if (terminal.line[y][i - 1].mode & ATTR_WRAP)
     return i;
 
-  while (i > 0 && terminal.line[y][i - 1].u == ' ')
+  while (i > 0 && terminal.line[y][i - 1].utf32_code_point == ' ')
     --i;
 
   return i;
@@ -466,7 +470,7 @@ int selected(int x, int y) {
 void selsnap(int *x, int *y, int direction) {
   int newx, newy, xt, yt;
   int delim, prevdelim;
-  Glyph *gp, *prevgp;
+  Character *gp, *prevgp;
 
   switch (sel.snap) {
   case SNAP_WORD:
@@ -475,7 +479,7 @@ void selsnap(int *x, int *y, int direction) {
      * beginning of a line.
      */
     prevgp = &terminal.line[*y][*x];
-    prevdelim = ISDELIM(prevgp->u);
+    prevdelim = ISDELIM(prevgp->utf32_code_point);
     for (;;) {
       newx = *x + direction;
       newy = *y;
@@ -497,9 +501,10 @@ void selsnap(int *x, int *y, int direction) {
         break;
 
       gp = &terminal.line[newy][newx];
-      delim = ISDELIM(gp->u);
+      delim = ISDELIM(gp->utf32_code_point);
       if (!(gp->mode & ATTR_WDUMMY) &&
-          (delim != prevdelim || (delim && gp->u != prevgp->u)))
+          (delim != prevdelim ||
+           (delim && gp->utf32_code_point != prevgp->utf32_code_point)))
         break;
 
       *x = newx;
@@ -535,7 +540,7 @@ void selsnap(int *x, int *y, int direction) {
 char *getsel(void) {
   char *str, *ptr;
   int y, bufsize, lastx, linelen;
-  Glyph *gp, *last;
+  Character *gp, *last;
 
   if (sel.ob.x == -1)
     return NULL;
@@ -558,14 +563,14 @@ char *getsel(void) {
       lastx = (sel.ne.y == y) ? sel.ne.x : terminal.col - 1;
     }
     last = &terminal.line[y][MIN(lastx, linelen - 1)];
-    while (last >= gp && last->u == ' ')
+    while (last >= gp && last->utf32_code_point == ' ')
       --last;
 
     for (; gp <= last; ++gp) {
       if (gp->mode & ATTR_WDUMMY)
         continue;
 
-      ptr += utf8encode(gp->u, ptr);
+      ptr += utf8encode(gp->utf32_code_point, ptr);
     }
 
     /*
@@ -994,7 +999,7 @@ void tmoveto(int x, int y) {
   terminal.cursor.y = LIMIT(y, miny, maxy);
 }
 
-void tsetchar(Rune u, Glyph *attr, int x, int y) {
+void tsetchar(uint32_t utf32_code_point, Character *attr, int x, int y) {
   static char *vt100_0[62] = {
       /* 0x41 - 0x7e */
       "↑", "↓", "→", "←", "█", "▚", "☃",      /* A - G */
@@ -1011,27 +1016,27 @@ void tsetchar(Rune u, Glyph *attr, int x, int y) {
    * The table is proudly stolen from rxvt.
    */
   if (terminal.trantbl[terminal.charset] == CS_GRAPHIC0 &&
-      BETWEEN(u, 0x41, 0x7e) && vt100_0[u - 0x41])
-    utf8decode(vt100_0[u - 0x41], &u, UTF_SIZ);
+      BETWEEN(utf32_code_point, 0x41, 0x7e) && vt100_0[utf32_code_point - 0x41])
+    utf8decode(vt100_0[utf32_code_point - 0x41], &utf32_code_point, UTF_SIZ);
 
   if (terminal.line[y][x].mode & ATTR_WIDE) {
     if (x + 1 < terminal.col) {
-      terminal.line[y][x + 1].u = ' ';
+      terminal.line[y][x + 1].utf32_code_point = ' ';
       terminal.line[y][x + 1].mode &= ~ATTR_WDUMMY;
     }
   } else if (terminal.line[y][x].mode & ATTR_WDUMMY) {
-    terminal.line[y][x - 1].u = ' ';
+    terminal.line[y][x - 1].utf32_code_point = ' ';
     terminal.line[y][x - 1].mode &= ~ATTR_WIDE;
   }
 
   terminal.dirty[y] = 1;
   terminal.line[y][x] = *attr;
-  terminal.line[y][x].u = u;
+  terminal.line[y][x].utf32_code_point = utf32_code_point;
 }
 
 void tclearregion(int x1, int y1, int x2, int y2) {
   int x, y, temp;
-  Glyph *gp;
+  Character *gp;
 
   if (x1 > x2)
     temp = x1, x1 = x2, x2 = temp;
@@ -1052,14 +1057,14 @@ void tclearregion(int x1, int y1, int x2, int y2) {
       gp->fg = terminal.cursor.attr.fg;
       gp->bg = terminal.cursor.attr.bg;
       gp->mode = 0;
-      gp->u = ' ';
+      gp->utf32_code_point = ' ';
     }
   }
 }
 
 void tdeletechar(int n) {
   int dst, src, size;
-  Glyph *line;
+  Character *line;
 
   LIMIT(n, 0, terminal.col - terminal.cursor.x);
 
@@ -1068,14 +1073,14 @@ void tdeletechar(int n) {
   size = terminal.col - src;
   line = terminal.line[terminal.cursor.y];
 
-  memmove(&line[dst], &line[src], size * sizeof(Glyph));
+  memmove(&line[dst], &line[src], size * sizeof(Character));
   tclearregion(terminal.col - n, terminal.cursor.y, terminal.col - 1,
                terminal.cursor.y);
 }
 
 void tinsertblank(int n) {
   int dst, src, size;
-  Glyph *line;
+  Character *line;
 
   LIMIT(n, 0, terminal.col - terminal.cursor.x);
 
@@ -1084,7 +1089,7 @@ void tinsertblank(int n) {
   size = terminal.col - dst;
   line = terminal.line[terminal.cursor.y];
 
-  memmove(&line[dst], &line[src], size * sizeof(Glyph));
+  memmove(&line[dst], &line[src], size * sizeof(Character));
   tclearregion(src, terminal.cursor.y, dst - 1, terminal.cursor.y);
 }
 
@@ -1960,19 +1965,19 @@ int eschandle(uchar ascii) {
   return 1;
 }
 
-void tputc(Rune u) {
+void tputc(uint32_t utf32_code_point) {
   char c[UTF_SIZ];
   int control;
   int width, len;
-  Glyph *gp;
+  Character *gp;
 
-  control = ISCONTROL(u);
+  control = ISCONTROL(utf32_code_point);
   if (!IS_SET(MODE_UTF8)) {
-    c[0] = u;
+    c[0] = utf32_code_point;
     width = len = 1;
   } else {
-    len = utf8encode(u, c);
-    if (!control && (width = wcwidth(u)) == -1) {
+    len = utf8encode(utf32_code_point, c);
+    if (!control && (width = wcwidth(utf32_code_point)) == -1) {
       memcpy(c, "\357\277\275", 4); /* UTF_INVALID */
       width = 1;
     }
@@ -1985,7 +1990,9 @@ void tputc(Rune u) {
    * character.
    */
   if (terminal.esc & ESC_STR) {
-    if (u == '\a' || u == 030 || u == 032 || u == 033 || ISCONTROLC1(u)) {
+    if (utf32_code_point == '\a' || utf32_code_point == 030 ||
+        utf32_code_point == 032 || utf32_code_point == 033 ||
+        ISCONTROLC1(utf32_code_point)) {
       terminal.esc &= ~(ESC_START | ESC_STR | ESC_DCS);
       terminal.esc |= ESC_STR_END;
       goto check_control_code;
@@ -2020,15 +2027,15 @@ check_control_code:
    * they must not cause conflicts with sequences.
    */
   if (control) {
-    tcontrolcode(u);
+    tcontrolcode(utf32_code_point);
     /*
      * control codes are not shown ever
      */
     return;
   } else if (terminal.esc & ESC_START) {
     if (terminal.esc & ESC_CSI) {
-      csiescseq.buf[csiescseq.len++] = u;
-      if (BETWEEN(u, 0x40, 0x7E) ||
+      csiescseq.buf[csiescseq.len++] = utf32_code_point;
+      if (BETWEEN(utf32_code_point, 0x40, 0x7E) ||
           csiescseq.len >= sizeof(csiescseq.buf) - 1) {
         terminal.esc = 0;
         csiparse();
@@ -2036,13 +2043,13 @@ check_control_code:
       }
       return;
     } else if (terminal.esc & ESC_UTF8) {
-      tdefutf8(u);
+      tdefutf8(utf32_code_point);
     } else if (terminal.esc & ESC_ALTCHARSET) {
-      tdeftran(u);
+      tdeftran(utf32_code_point);
     } else if (terminal.esc & ESC_TEST) {
-      tdectest(u);
+      tdectest(utf32_code_point);
     } else {
-      if (!eschandle(u))
+      if (!eschandle(utf32_code_point))
         return;
       /* sequence already finished */
     }
@@ -2065,19 +2072,20 @@ check_control_code:
 
   if (IS_SET(MODE_INSERT) && terminal.cursor.x + width < terminal.col)
     memmove(gp + width, gp,
-            (terminal.col - terminal.cursor.x - width) * sizeof(Glyph));
+            (terminal.col - terminal.cursor.x - width) * sizeof(Character));
 
   if (terminal.cursor.x + width > terminal.col) {
     tnewline(1);
     gp = &terminal.line[terminal.cursor.y][terminal.cursor.x];
   }
 
-  tsetchar(u, &terminal.cursor.attr, terminal.cursor.x, terminal.cursor.y);
+  tsetchar(utf32_code_point, &terminal.cursor.attr, terminal.cursor.x,
+           terminal.cursor.y);
 
   if (width == 2) {
     gp->mode |= ATTR_WIDE;
     if (terminal.cursor.x + 1 < terminal.col) {
-      gp[1].u = '\0';
+      gp[1].utf32_code_point = '\0';
       gp[1].mode = ATTR_WDUMMY;
     }
   }
@@ -2092,27 +2100,29 @@ int twrite(const char *buffer, int length, int show_ctrl) {
   int bytes_written = 0;
   int charsize;
   for (; bytes_written < length; bytes_written += charsize) {
-    Rune u;
+    uint32_t utf32_code_point;
     if (IS_SET(MODE_UTF8)) {
       /* process a complete utf8 char */
-      charsize = utf8decode(buffer + bytes_written, &u, length - bytes_written);
+      charsize = utf8decode(buffer + bytes_written, &utf32_code_point,
+                            length - bytes_written);
       if (charsize == 0)
         break;
     } else {
-      u = buffer[bytes_written] & 0xFF;
+      utf32_code_point = buffer[bytes_written] & 0xFF;
       charsize = 1;
     }
-    if (show_ctrl && ISCONTROL(u)) {
-      if (u & 0x80) {
-        u &= 0x7f;
+    if (show_ctrl && ISCONTROL(utf32_code_point)) {
+      if (utf32_code_point & 0x80) {
+        utf32_code_point &= 0x7f;
         tputc('^');
         tputc('[');
-      } else if (u != '\n' && u != '\r' && u != '\t') {
-        u ^= 0x40;
+      } else if (utf32_code_point != '\n' && utf32_code_point != '\r' &&
+                 utf32_code_point != '\t') {
+        utf32_code_point ^= 0x40;
         tputc('^');
       }
     }
-    tputc(u);
+    tputc(utf32_code_point);
   }
   return bytes_written;
 }
@@ -2162,14 +2172,14 @@ void tresize(int col, int row) {
 
   /* resize each row to new width, zero-pad if needed */
   for (i = 0; i < minrow; i++) {
-    terminal.line[i] = xrealloc(terminal.line[i], col * sizeof(Glyph));
-    terminal.alt[i] = xrealloc(terminal.alt[i], col * sizeof(Glyph));
+    terminal.line[i] = xrealloc(terminal.line[i], col * sizeof(Character));
+    terminal.alt[i] = xrealloc(terminal.alt[i], col * sizeof(Character));
   }
 
   /* allocate any new rows */
   for (/* i = minrow */; i < row; i++) {
-    terminal.line[i] = xmalloc(col * sizeof(Glyph));
-    terminal.alt[i] = xmalloc(col * sizeof(Glyph));
+    terminal.line[i] = xmalloc(col * sizeof(Character));
+    terminal.alt[i] = xmalloc(col * sizeof(Character));
   }
   if (col > terminal.col) {
     bp = terminal.tabs + terminal.col;

@@ -45,17 +45,14 @@ typedef unsigned int uint;
 typedef unsigned long ulong;
 typedef unsigned short ushort;
 
-typedef uint_least32_t Rune;
-
-#define Glyph Glyph_
 typedef struct {
-  Rune u;      /* character code */
+  uint32_t utf32_code_point;
   ushort mode; /* attribute flags */
-  uint32_t fg; /* foreground  */
-  uint32_t bg; /* background  */
-} Glyph;
+  uint32_t fg;
+  uint32_t bg;
+} Character;
 
-typedef Glyph *Line;
+typedef Character *Line;
 
 typedef union {
   int i;
@@ -90,7 +87,7 @@ void selextend(int, int, int, int);
 int selected(int, int);
 char *getsel(void);
 
-size_t utf8encode(Rune, char *);
+size_t utf8encode(uint32_t, char *);
 
 void *xmalloc(size_t);
 void *xrealloc(void *, size_t);
