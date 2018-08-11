@@ -94,7 +94,6 @@ typedef struct {
   int char_width;
   int char_height;
   int mode; /* window state/mode flags */
-  int cursor_style;
 } TermWindow;
 
 typedef struct {
@@ -1740,14 +1739,6 @@ void usage(void) {
 }
 
 int main(int argc, char **argv, char **envp) {
-  /*
-   * Shape of cursor
-   * 2: Block ("█")
-   * 4: Underline ("_")
-   * 6: Bar ("|")
-   */
-  term_window.cursor_style = 7;
-
   // parse optional arguments
   for (argv0 = *argv, argv++, argc--;
        argv[0] && argv[0][0] == '-' && argv[0][1]; argc--, argv++) {

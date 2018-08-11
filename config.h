@@ -45,11 +45,6 @@ static unsigned int action_fps = 30;
 static unsigned int blinktimeout = 800;
 
 /*
- * thickness of underline and bar cursors
- */
-static unsigned int cursorthickness = 2;
-
-/*
  * bell volume. It must be a value between -100 and 100. Use 0 for disabling
  * it
  */
