@@ -94,7 +94,6 @@ void *xrealloc(void *, size_t);
 char *xstrdup(char *);
 
 /* config.h globals */
-extern char *stty_args;
 extern char *vtiden;
 extern char *worddelimiters;
 extern int allowaltscreen;

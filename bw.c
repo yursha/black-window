@@ -147,7 +147,6 @@ typedef struct {
   int narg; /* nb of args */
 } STREscape;
 
-static void stty(char **);
 static void sigchld(int);
 static void ttywriteraw(const char *, size_t);
 
@@ -619,28 +618,6 @@ void sigchld(int a) {
   if (!WIFEXITED(stat) || WEXITSTATUS(stat))
     die("child finished with error '%d'\n", stat);
   exit(0);
-}
-
-void stty(char **args) {
-  char cmd[_POSIX_ARG_MAX], **p, *q, *s;
-  size_t n, siz;
-
-  if ((n = strlen(stty_args)) > sizeof(cmd) - 1)
-    die("incorrect stty parameters\n");
-  memcpy(cmd, stty_args, n);
-  q = cmd + n;
-  siz = sizeof(cmd) - n;
-  for (p = args; p && (s = *p); ++p) {
-    if ((n = strlen(s)) > siz - 1)
-      die("stty parameter length too long\n");
-    *q++ = ' ';
-    memcpy(q, s, n);
-    q += n;
-    siz -= n + 1;
-  }
-  *q = '\0';
-  if (system(cmd) != 0)
-    perror("Couldn't call stty");
 }
 
 // Return the file descriptor
