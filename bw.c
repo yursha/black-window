@@ -214,7 +214,7 @@ static ssize_t xwrite(int, const char *, size_t);
 /* Globals */
 static Terminal terminal;
 static Selection sel;
-static CSIEscape csiescseq;
+static CSIEscape csi_escape_sequence;
 static STREscape strescseq;
 static int tty_master_fd;
 static pid_t pid;
@@ -953,31 +953,32 @@ void tnewline(int first_col) {
 }
 
 void csiparse(void) {
-  char *p = csiescseq.buf, *np;
+  char *p = csi_escape_sequence.buf, *np;
   long int v;
 
-  csiescseq.narg = 0;
+  csi_escape_sequence.narg = 0;
   if (*p == '?') {
-    csiescseq.priv = 1;
+    csi_escape_sequence.priv = 1;
     p++;
   }
 
-  csiescseq.buf[csiescseq.len] = '\0';
-  while (p < csiescseq.buf + csiescseq.len) {
+  csi_escape_sequence.buf[csi_escape_sequence.len] = '\0';
+  while (p < csi_escape_sequence.buf + csi_escape_sequence.len) {
     np = NULL;
     v = strtol(p, &np, 10);
     if (np == p)
       v = 0;
     if (v == LONG_MAX || v == LONG_MIN)
       v = -1;
-    csiescseq.arg[csiescseq.narg++] = v;
+    csi_escape_sequence.arg[csi_escape_sequence.narg++] = v;
     p = np;
-    if (*p != ';' || csiescseq.narg == ESC_ARG_SIZ)
+    if (*p != ';' || csi_escape_sequence.narg == ESC_ARG_SIZ)
       break;
     p++;
   }
-  csiescseq.mode[0] = *p++;
-  csiescseq.mode[1] = (p < csiescseq.buf + csiescseq.len) ? *p : '\0';
+  csi_escape_sequence.mode[0] = *p++;
+  csi_escape_sequence.mode[1] =
+      (p < csi_escape_sequence.buf + csi_escape_sequence.len) ? *p : '\0';
 }
 
 /* for absolute user moves, when decom is set */
@@ -1377,11 +1378,11 @@ void tsetmode(int priv, int set, int *args, int narg) {
   }
 }
 
-void csihandle(void) {
+void csihandle() {
   char buf[40];
   int len;
 
-  switch (csiescseq.mode[0]) {
+  switch (csi_escape_sequence.mode[0]) {
   default:
   unknown:
     fprintf(stderr, "erresc: unknown csi ");
@@ -1389,41 +1390,41 @@ void csihandle(void) {
     /* die(""); */
     break;
   case '@': /* ICH -- Insert <n> blank char */
-    DEFAULT(csiescseq.arg[0], 1);
-    tinsertblank(csiescseq.arg[0]);
+    DEFAULT(csi_escape_sequence.arg[0], 1);
+    tinsertblank(csi_escape_sequence.arg[0]);
     break;
   case 'A': /* CUU -- Cursor <n> Up */
-    DEFAULT(csiescseq.arg[0], 1);
-    tmoveto(terminal.cursor.x, terminal.cursor.y - csiescseq.arg[0]);
+    DEFAULT(csi_escape_sequence.arg[0], 1);
+    tmoveto(terminal.cursor.x, terminal.cursor.y - csi_escape_sequence.arg[0]);
     break;
   case 'B': /* CUD -- Cursor <n> Down */
   case 'e': /* VPR --Cursor <n> Down */
-    DEFAULT(csiescseq.arg[0], 1);
-    tmoveto(terminal.cursor.x, terminal.cursor.y + csiescseq.arg[0]);
+    DEFAULT(csi_escape_sequence.arg[0], 1);
+    tmoveto(terminal.cursor.x, terminal.cursor.y + csi_escape_sequence.arg[0]);
     break;
   case 'c': /* DA -- Device Attributes */
-    if (csiescseq.arg[0] == 0)
+    if (csi_escape_sequence.arg[0] == 0)
       ttywrite(vtiden, strlen(vtiden), 0);
     break;
   case 'C': /* CUF -- Cursor <n> Forward */
   case 'a': /* HPR -- Cursor <n> Forward */
-    DEFAULT(csiescseq.arg[0], 1);
-    tmoveto(terminal.cursor.x + csiescseq.arg[0], terminal.cursor.y);
+    DEFAULT(csi_escape_sequence.arg[0], 1);
+    tmoveto(terminal.cursor.x + csi_escape_sequence.arg[0], terminal.cursor.y);
     break;
   case 'D': /* CUB -- Cursor <n> Backward */
-    DEFAULT(csiescseq.arg[0], 1);
-    tmoveto(terminal.cursor.x - csiescseq.arg[0], terminal.cursor.y);
+    DEFAULT(csi_escape_sequence.arg[0], 1);
+    tmoveto(terminal.cursor.x - csi_escape_sequence.arg[0], terminal.cursor.y);
     break;
   case 'E': /* CNL -- Cursor <n> Down and first col */
-    DEFAULT(csiescseq.arg[0], 1);
-    tmoveto(0, terminal.cursor.y + csiescseq.arg[0]);
+    DEFAULT(csi_escape_sequence.arg[0], 1);
+    tmoveto(0, terminal.cursor.y + csi_escape_sequence.arg[0]);
     break;
   case 'F': /* CPL -- Cursor <n> Up and first col */
-    DEFAULT(csiescseq.arg[0], 1);
-    tmoveto(0, terminal.cursor.y - csiescseq.arg[0]);
+    DEFAULT(csi_escape_sequence.arg[0], 1);
+    tmoveto(0, terminal.cursor.y - csi_escape_sequence.arg[0]);
     break;
   case 'g': /* TBC -- Tabulation clear */
-    switch (csiescseq.arg[0]) {
+    switch (csi_escape_sequence.arg[0]) {
     case 0: /* clear current tab stop */
       terminal.tabs[terminal.cursor.x] = 0;
       break;
@@ -1436,21 +1437,21 @@ void csihandle(void) {
     break;
   case 'G': /* CHA -- Move to <col> */
   case '`': /* HPA */
-    DEFAULT(csiescseq.arg[0], 1);
-    tmoveto(csiescseq.arg[0] - 1, terminal.cursor.y);
+    DEFAULT(csi_escape_sequence.arg[0], 1);
+    tmoveto(csi_escape_sequence.arg[0] - 1, terminal.cursor.y);
     break;
   case 'H': /* CUP -- Move to <row> <col> */
   case 'f': /* HVP */
-    DEFAULT(csiescseq.arg[0], 1);
-    DEFAULT(csiescseq.arg[1], 1);
-    tmoveato(csiescseq.arg[1] - 1, csiescseq.arg[0] - 1);
+    DEFAULT(csi_escape_sequence.arg[0], 1);
+    DEFAULT(csi_escape_sequence.arg[1], 1);
+    tmoveato(csi_escape_sequence.arg[1] - 1, csi_escape_sequence.arg[0] - 1);
     break;
   case 'I': /* CHT -- Cursor Forward Tabulation <n> tab stops */
-    DEFAULT(csiescseq.arg[0], 1);
-    tputtab(csiescseq.arg[0]);
+    DEFAULT(csi_escape_sequence.arg[0], 1);
+    tputtab(csi_escape_sequence.arg[0]);
     break;
   case 'J': /* ED -- Clear screen */
-    switch (csiescseq.arg[0]) {
+    switch (csi_escape_sequence.arg[0]) {
     case 0: /* below */
       tclearregion(terminal.cursor.x, terminal.cursor.y, terminal.col - 1,
                    terminal.cursor.y);
@@ -1472,7 +1473,7 @@ void csihandle(void) {
     }
     break;
   case 'K': /* EL -- Clear line */
-    switch (csiescseq.arg[0]) {
+    switch (csi_escape_sequence.arg[0]) {
     case 0: /* right */
       tclearregion(terminal.cursor.x, terminal.cursor.y, terminal.col - 1,
                    terminal.cursor.y);
@@ -1486,61 +1487,65 @@ void csihandle(void) {
     }
     break;
   case 'S': /* SU -- Scroll <n> line up */
-    DEFAULT(csiescseq.arg[0], 1);
-    tscrollup(terminal.top, csiescseq.arg[0]);
+    DEFAULT(csi_escape_sequence.arg[0], 1);
+    tscrollup(terminal.top, csi_escape_sequence.arg[0]);
     break;
   case 'T': /* SD -- Scroll <n> line down */
-    DEFAULT(csiescseq.arg[0], 1);
-    tscrolldown(terminal.top, csiescseq.arg[0]);
+    DEFAULT(csi_escape_sequence.arg[0], 1);
+    tscrolldown(terminal.top, csi_escape_sequence.arg[0]);
     break;
   case 'L': /* IL -- Insert <n> blank lines */
-    DEFAULT(csiescseq.arg[0], 1);
-    tinsertblankline(csiescseq.arg[0]);
+    DEFAULT(csi_escape_sequence.arg[0], 1);
+    tinsertblankline(csi_escape_sequence.arg[0]);
     break;
   case 'l': /* RM -- Reset Mode */
-    tsetmode(csiescseq.priv, 0, csiescseq.arg, csiescseq.narg);
+    tsetmode(csi_escape_sequence.priv, 0, csi_escape_sequence.arg,
+             csi_escape_sequence.narg);
     break;
   case 'M': /* DL -- Delete <n> lines */
-    DEFAULT(csiescseq.arg[0], 1);
-    tdeleteline(csiescseq.arg[0]);
+    DEFAULT(csi_escape_sequence.arg[0], 1);
+    tdeleteline(csi_escape_sequence.arg[0]);
     break;
   case 'X': /* ECH -- Erase <n> char */
-    DEFAULT(csiescseq.arg[0], 1);
+    DEFAULT(csi_escape_sequence.arg[0], 1);
     tclearregion(terminal.cursor.x, terminal.cursor.y,
-                 terminal.cursor.x + csiescseq.arg[0] - 1, terminal.cursor.y);
+                 terminal.cursor.x + csi_escape_sequence.arg[0] - 1,
+                 terminal.cursor.y);
     break;
   case 'P': /* DCH -- Delete <n> char */
-    DEFAULT(csiescseq.arg[0], 1);
-    tdeletechar(csiescseq.arg[0]);
+    DEFAULT(csi_escape_sequence.arg[0], 1);
+    tdeletechar(csi_escape_sequence.arg[0]);
     break;
   case 'Z': /* CBT -- Cursor Backward Tabulation <n> tab stops */
-    DEFAULT(csiescseq.arg[0], 1);
-    tputtab(-csiescseq.arg[0]);
+    DEFAULT(csi_escape_sequence.arg[0], 1);
+    tputtab(-csi_escape_sequence.arg[0]);
     break;
   case 'd': /* VPA -- Move to <row> */
-    DEFAULT(csiescseq.arg[0], 1);
-    tmoveato(terminal.cursor.x, csiescseq.arg[0] - 1);
+    DEFAULT(csi_escape_sequence.arg[0], 1);
+    tmoveato(terminal.cursor.x, csi_escape_sequence.arg[0] - 1);
     break;
   case 'h': /* SM -- Set terminal mode */
-    tsetmode(csiescseq.priv, 1, csiescseq.arg, csiescseq.narg);
+    tsetmode(csi_escape_sequence.priv, 1, csi_escape_sequence.arg,
+             csi_escape_sequence.narg);
     break;
   case 'm': /* SGR -- Terminal attribute (color) */
-    tsetattr(csiescseq.arg, csiescseq.narg);
+    tsetattr(csi_escape_sequence.arg, csi_escape_sequence.narg);
     break;
   case 'n': /* DSR – Device Status Report (cursor position) */
-    if (csiescseq.arg[0] == 6) {
+    if (csi_escape_sequence.arg[0] == 6) {
       len = snprintf(buf, sizeof(buf), "\033[%i;%iR", terminal.cursor.y + 1,
                      terminal.cursor.x + 1);
       ttywrite(buf, len, 0);
     }
     break;
   case 'r': /* DECSTBM -- Set Scrolling Region */
-    if (csiescseq.priv) {
+    if (csi_escape_sequence.priv) {
       goto unknown;
     } else {
-      DEFAULT(csiescseq.arg[0], 1);
-      DEFAULT(csiescseq.arg[1], terminal.row);
-      tsetscroll(csiescseq.arg[0] - 1, csiescseq.arg[1] - 1);
+      DEFAULT(csi_escape_sequence.arg[0], 1);
+      DEFAULT(csi_escape_sequence.arg[1], terminal.row);
+      tsetscroll(csi_escape_sequence.arg[0] - 1,
+                 csi_escape_sequence.arg[1] - 1);
       tmoveato(0, 0);
     }
     break;
@@ -1550,16 +1555,6 @@ void csihandle(void) {
   case 'u': /* DECRC -- Restore cursor position (ANSI.SYS) */
     tcursor(CURSOR_LOAD);
     break;
-  case ' ':
-    switch (csiescseq.mode[1]) {
-    case 'q': /* DECSCUSR -- Set Cursor Style */
-      if (xsetcursor(csiescseq.arg[0]))
-        goto unknown;
-      break;
-    default:
-      goto unknown;
-    }
-    break;
   }
 }
 
@@ -1568,8 +1563,8 @@ void csidump(void) {
   uint c;
 
   fprintf(stderr, "ESC[");
-  for (i = 0; i < csiescseq.len; i++) {
-    c = csiescseq.buf[i] & 0xff;
+  for (i = 0; i < csi_escape_sequence.len; i++) {
+    c = csi_escape_sequence.buf[i] & 0xff;
     if (isprint(c)) {
       putc(c, stderr);
     } else if (c == '\n') {
@@ -1585,7 +1580,9 @@ void csidump(void) {
   putc('\n', stderr);
 }
 
-void csireset(void) { memset(&csiescseq, 0, sizeof(csiescseq)); }
+void csireset(void) {
+  memset(&csi_escape_sequence, 0, sizeof(csi_escape_sequence));
+}
 
 void strhandle(void) {
   char *p = NULL;
@@ -2036,9 +2033,9 @@ check_control_code:
     return;
   } else if (terminal.esc & ESC_START) {
     if (terminal.esc & ESC_CSI) {
-      csiescseq.buf[csiescseq.len++] = utf32_code_point;
+      csi_escape_sequence.buf[csi_escape_sequence.len++] = utf32_code_point;
       if (BETWEEN(utf32_code_point, 0x40, 0x7E) ||
-          csiescseq.len >= sizeof(csiescseq.buf) - 1) {
+          csi_escape_sequence.len >= sizeof(csi_escape_sequence.buf) - 1) {
         terminal.esc = 0;
         csiparse();
         csihandle();

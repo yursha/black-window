@@ -1390,33 +1390,9 @@ void x_draw_cursor(int cursor_x, int cursor_y, Character cursor_glyph,
     color = drawing_context.col[cursor_glyph.bg];
   }
 
-  /* draw the new one */
+  /* draw the new one if the window is focused */
   if (term_window.mode & MODE_FOCUSED) {
-    switch (term_window.cursor_style) {
-    case 7: /* st extension: snowman (U+2603) */
-      cursor_glyph.utf32_code_point = 0x2603;
-    case 0: /* Blinking Block */
-    case 1: /* Blinking Block (Default) */
-    case 2: /* Steady Block */
-      x_draw_character(cursor_glyph, cursor_x, cursor_y);
-      break;
-    case 3: /* Blinking Underline */
-    case 4: /* Steady Underline */
-      XftDrawRect(x_window.draw, &color,
-                  /*x=*/borderpx + cursor_x * term_window.char_width,
-                  /*y=*/borderpx + (cursor_y + 1) * term_window.char_height -
-                      cursorthickness,
-                  /*width=*/term_window.char_width, /*height=*/cursorthickness);
-      break;
-    case 5: /* Blinking bar */
-    case 6: /* Steady bar */
-      XftDrawRect(x_window.draw, &color,
-                  /*x=*/borderpx + cursor_x * term_window.char_width,
-                  /*y=*/borderpx + cursor_y * term_window.char_height,
-                  /*width=*/cursorthickness,
-                  /*height=*/term_window.char_height);
-      break;
-    }
+    x_draw_character(cursor_glyph, cursor_x, cursor_y);
   }
 }
 
@@ -1498,14 +1474,6 @@ void xsetmode(int set, unsigned int flags) {
   MODBIT(term_window.mode, set, flags);
   if ((term_window.mode & MODE_REVERSE) != (mode & MODE_REVERSE))
     redraw();
-}
-
-int xsetcursor(int cursor) {
-  DEFAULT(cursor, 1);
-  if (!BETWEEN(cursor, 0, 6))
-    return 1;
-  term_window.cursor_style = cursor;
-  return 0;
 }
 
 void xseturgency(int add) {
@@ -1778,7 +1746,7 @@ int main(int argc, char **argv, char **envp) {
    * 4: Underline ("_")
    * 6: Bar ("|")
    */
-  term_window.cursor_style = 2;
+  term_window.cursor_style = 7;
 
   // parse optional arguments
   for (argv0 = *argv, argv++, argc--;
