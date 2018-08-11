@@ -31,7 +31,6 @@ Xft
 
 */
 
-static char *argv0;
 #include "bw.h"
 #include "win.h"
 
@@ -1733,14 +1732,13 @@ void run(void) {
 }
 
 void usage(void) {
-  die("usage: %s [-a] [-i] [-v] [-f font] [-g geometry]"
-      " [-w windowid] command [args ...]\n",
-      argv0, argv0);
+  die("usage: bw [-a] [-i] [-f font] [-g geometry]"
+      " [-w windowid] command [args ...]\n");
 }
 
 int main(int argc, char **argv, char **envp) {
   // parse optional arguments
-  for (argv0 = *argv, argv++, argc--;
+  for (argv++, argc--;
        argv[0] && argv[0][0] == '-' && argv[0][1]; argc--, argv++) {
 
     // stop on --
@@ -1762,9 +1760,6 @@ int main(int argc, char **argv, char **envp) {
       break;
     case 'i':
       x_window.isfixed = 1;
-      break;
-    case 'v':
-      die("%s " VERSION "\n", argv0);
       break;
     case 'f':
     case 'g':
