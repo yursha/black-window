@@ -1417,25 +1417,6 @@ void x_draw_cursor(int cursor_x, int cursor_y, Character cursor_glyph,
                   /*height=*/term_window.char_height);
       break;
     }
-  } else {
-    XftDrawRect(x_window.draw, &color,
-                /*x=*/borderpx + cursor_x * term_window.char_width,
-                /*y=*/borderpx + cursor_y * term_window.char_height,
-                /*width=*/term_window.char_width - 1, /*height=*/1);
-    XftDrawRect(x_window.draw, &color,
-                /*x=*/borderpx + cursor_x * term_window.char_width,
-                /*y=*/borderpx + cursor_y * term_window.char_height,
-                /*width=*/1,
-                /*height=*/term_window.char_height - 1);
-    XftDrawRect(x_window.draw, &color,
-                /*x=*/borderpx + (cursor_x + 1) * term_window.char_width - 1,
-                /*y=*/borderpx + cursor_y * term_window.char_height,
-                /*width=*/1,
-                /*height=*/term_window.char_height - 1);
-    XftDrawRect(x_window.draw, &color,
-                /*x=*/borderpx + cursor_x * term_window.char_width,
-                /*y=*/borderpx + (cursor_y + 1) * term_window.char_height - 1,
-                /*width=*/term_window.char_width, /*height=*/1);
   }
 }
 
