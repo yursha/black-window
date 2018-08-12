@@ -100,11 +100,11 @@ typedef struct {
   Colormap cmap;
   Window window;
   Pixmap pixmap;
-  XftGlyphFontSpec *specbuf; /* font spec buffer used for rendering */
+  XftGlyphFontSpec *glyph_font_specs; /* font spec buffer used for rendering */
   Atom xembed, wmdeletewin, netwmname, netwmpid;
-  XIM xim;
-  XIC xic;
-  XftDraw *draw;
+  XIM input_method;
+  XIC input_context;
+  XftDraw *xft_draw;
   Visual *visual;
   XSetWindowAttributes attrs;
   int screen;
@@ -628,11 +628,11 @@ void xresize(int col, int row) {
       XCreatePixmap(x_window.display, x_window.window, term_window.window_width,
                     term_window.window_height,
                     DefaultDepth(x_window.display, x_window.screen));
-  XftDrawChange(x_window.draw, x_window.pixmap);
+  XftDrawChange(x_window.xft_draw, x_window.pixmap);
   xclear(0, 0, term_window.window_width, term_window.window_height);
 
   /* resize to new width */
-  x_window.specbuf = xrealloc(x_window.specbuf, col * sizeof(XftGlyphFontSpec));
+  x_window.glyph_font_specs = xrealloc(x_window.glyph_font_specs, col * sizeof(XftGlyphFontSpec));
 }
 
 ushort sixd_to_16bit(int x) { return x == 0 ? 0 : 0x3737 + 0x2828 * x; }
@@ -705,7 +705,7 @@ int xsetcolorname(int x, const char *name) {
  */
 void xclear(int x1, int y1, int x2, int y2) {
   XftDrawRect(
-      x_window.draw,
+      x_window.xft_draw,
       &drawing_context.col[IS_SET(MODE_REVERSE) ? defaultfg : defaultbg], x1,
       y1, x2 - x1, y2 - y1);
 }
@@ -891,9 +891,7 @@ void xunloadfonts(void) {
 }
 
 void xinit(int cols, int rows) {
-  Cursor cursor_id;
   pid_t thispid = getpid();
-  XColor xmousefg, xmousebg;
 
   // Connect to X server. Use environment variable DISPLAY for address.
   if (!(x_window.display = XOpenDisplay(NULL)))
@@ -946,50 +944,35 @@ void xinit(int cols, int rows) {
   XFillRectangle(x_window.display, x_window.pixmap, drawing_context.gc, 0, 0,
                  term_window.window_width, term_window.window_height);
 
-  /* font spec buffer */
-  x_window.specbuf = xmalloc(cols * sizeof(XftGlyphFontSpec));
+  x_window.glyph_font_specs = xmalloc(cols * sizeof(XftGlyphFontSpec));
 
   /* Xft rendering context */
-  x_window.draw = XftDrawCreate(x_window.display, x_window.pixmap,
+  x_window.xft_draw = XftDrawCreate(x_window.display, x_window.pixmap,
                                 x_window.visual, x_window.cmap);
 
   /* input methods */
-  if ((x_window.xim = XOpenIM(x_window.display, NULL, NULL, NULL)) == NULL) {
+  if ((x_window.input_method = XOpenIM(x_window.display, /*resource database=*/NULL, /*application_resource_name=*/NULL, /*application_class_name=*/NULL)) == NULL) {
     XSetLocaleModifiers("@im=local");
-    if ((x_window.xim = XOpenIM(x_window.display, NULL, NULL, NULL)) == NULL) {
+    if ((x_window.input_method = XOpenIM(x_window.display, NULL, NULL, NULL)) == NULL) {
       XSetLocaleModifiers("@im=");
-      if ((x_window.xim = XOpenIM(x_window.display, NULL, NULL, NULL)) ==
+      if ((x_window.input_method = XOpenIM(x_window.display, NULL, NULL, NULL)) ==
           NULL) {
         die("XOpenIM failed. Could not open input"
             " device.\n");
       }
     }
   }
-  x_window.xic = XCreateIC(
-      x_window.xim, XNInputStyle, XIMPreeditNothing | XIMStatusNothing,
+
+  // Input context.
+  x_window.input_context = XCreateIC(
+      x_window.input_method, XNInputStyle, XIMPreeditNothing | XIMStatusNothing,
       XNClientWindow, x_window.window, XNFocusWindow, x_window.window, NULL);
-  if (x_window.xic == NULL)
+  if (x_window.input_context == NULL)
     die("XCreateIC failed. Could not obtain input method.\n");
 
-  /* white cursor, black outline */
-  cursor_id = XCreateFontCursor(x_window.display, mouseshape);
+  /* Defaults to white cursor, black outline */
+  Cursor cursor_id = XCreateFontCursor(x_window.display, /*shape=*/XC_xterm);
   XDefineCursor(x_window.display, x_window.window, cursor_id);
-
-  if (XParseColor(x_window.display, x_window.cmap, colorname[mousefg],
-                  &xmousefg) == 0) {
-    xmousefg.red = 0xffff;
-    xmousefg.green = 0xffff;
-    xmousefg.blue = 0xffff;
-  }
-
-  if (XParseColor(x_window.display, x_window.cmap, colorname[mousebg],
-                  &xmousebg) == 0) {
-    xmousebg.red = 0x0000;
-    xmousebg.green = 0x0000;
-    xmousebg.blue = 0x0000;
-  }
-
-  XRecolorCursor(x_window.display, cursor_id, &xmousefg, &xmousebg);
 
   x_window.xembed = XInternAtom(x_window.display, "_XEMBED", False);
   x_window.wmdeletewin =
@@ -1271,31 +1254,31 @@ void x_draw_glyph_font_specs(const XftGlyphFontSpec *specs, Character base,
            term_window.window_height);
 
   /* Clean up the region we want to draw to. */
-  XftDrawRect(x_window.draw, bg, winx, winy, width, term_window.char_height);
+  XftDrawRect(x_window.xft_draw, bg, winx, winy, width, term_window.char_height);
 
   /* Set the clip region because Xft is sometimes dirty. */
   r.x = 0;
   r.y = 0;
   r.height = term_window.char_height;
   r.width = width;
-  XftDrawSetClipRectangles(x_window.draw, winx, winy, &r, 1);
+  XftDrawSetClipRectangles(x_window.xft_draw, winx, winy, &r, 1);
 
   /* Render the glyphs. */
-  XftDrawGlyphFontSpec(x_window.draw, fg, specs, len);
+  XftDrawGlyphFontSpec(x_window.xft_draw, fg, specs, len);
 
   /* Render underline and strikethrough. */
   if (base.mode & ATTR_UNDERLINE) {
-    XftDrawRect(x_window.draw, fg, winx, winy + drawing_context.font.ascent + 1,
+    XftDrawRect(x_window.xft_draw, fg, winx, winy + drawing_context.font.ascent + 1,
                 width, 1);
   }
 
   if (base.mode & ATTR_STRUCK) {
-    XftDrawRect(x_window.draw, fg, winx,
+    XftDrawRect(x_window.xft_draw, fg, winx,
                 winy + 2 * drawing_context.font.ascent / 3, width, 1);
   }
 
   /* Reset clip to none. */
-  XftDrawSetClip(x_window.draw, 0);
+  XftDrawSetClip(x_window.xft_draw, 0);
 }
 
 void x_draw_character(Character character, int x, int y) {
@@ -1374,7 +1357,7 @@ int xstartdraw(void) { return IS_SET(MODE_VISIBLE); }
 void xdrawline(Line line, int x1, int y1, int x2) {
   int i, x, ox, numspecs;
   Character base, new;
-  XftGlyphFontSpec *specs = x_window.specbuf;
+  XftGlyphFontSpec *specs = x_window.glyph_font_specs;
 
   numspecs = x_make_glyph_font_specs(specs, &line[x1], x2 - x1, x1, y1);
   i = ox = 0;
@@ -1454,13 +1437,13 @@ void focus(XEvent *ev) {
     return;
 
   if (ev->type == FocusIn) {
-    XSetICFocus(x_window.xic);
+    XSetICFocus(x_window.input_context);
     term_window.mode |= MODE_FOCUSED;
     xseturgency(0);
     if (IS_SET(MODE_FOCUS))
       ttywrite("\033[I", 3, 0);
   } else {
-    XUnsetICFocus(x_window.xic);
+    XUnsetICFocus(x_window.input_context);
     term_window.mode &= ~MODE_FOCUSED;
     if (IS_SET(MODE_FOCUS))
       ttywrite("\033[O", 3, 0);
@@ -1518,7 +1501,7 @@ void kpress(XEvent *ev) {
   if (IS_SET(MODE_KBDLOCK))
     return;
 
-  len = XmbLookupString(x_window.xic, e, buf, sizeof buf, &ksym, &status);
+  len = XmbLookupString(x_window.input_context, e, buf, sizeof buf, &ksym, &status);
   /* 1. shortcuts */
   for (bp = shortcuts; bp < shortcuts + LEN(shortcuts); bp++) {
     if (ksym == bp->keysym && match(bp->mod, e->state)) {
