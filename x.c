@@ -1696,7 +1696,7 @@ void run(void) {
 }
 
 void usage(void) {
-  die("usage: bw [-a] [-f font] command [args ...]\n");
+  die("usage: bw [-f font] command [args ...]\n");
 }
 
 int main(int argc, char **argv, char **envp) {
@@ -1718,9 +1718,6 @@ int main(int argc, char **argv, char **envp) {
     }
 
     switch (option) {
-    case 'a':
-      allowaltscreen = 0;
-      break;
     case 'f':
       if (argv[1] == NULL) {
         usage();
