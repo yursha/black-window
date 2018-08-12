@@ -894,7 +894,7 @@ void xinit(int cols, int rows) {
   pid_t thispid = getpid();
 
   // Connect to X server. Use environment variable DISPLAY for address.
-  if (!(x_window.display = XOpenDisplay(NULL)))
+  if (!(x_window.display = XOpenDisplay(0)))
     die("can't open display\n");
   x_window.screen = XDefaultScreen(x_window.display);
   x_window.visual = XDefaultVisual(x_window.display, x_window.screen);
@@ -970,10 +970,11 @@ void xinit(int cols, int rows) {
   if (x_window.input_context == NULL)
     die("XCreateIC failed. Could not obtain input method.\n");
 
-  /* Defaults to white cursor, black outline */
+  // Make mouse cursor convenient for text selection.
   Cursor cursor_id = XCreateFontCursor(x_window.display, /*shape=*/XC_xterm);
   XDefineCursor(x_window.display, x_window.window, cursor_id);
 
+  // X Atoms
   x_window.xembed = XInternAtom(x_window.display, "_XEMBED", False);
   x_window.wmdeletewin =
       XInternAtom(x_window.display, "WM_DELETE_WINDOW", False);
@@ -988,7 +989,10 @@ void xinit(int cols, int rows) {
   resettitle();
   XMapWindow(x_window.display, x_window.window);
   xhints();
-  XSync(x_window.display, False);
+
+  // Flush the output buffer and then wait until all requests have been received
+  // and processed by the X server.
+  XSync(x_window.display, /*should_discard_all_events_on_the_event_queue=*/0);
 
   clock_gettime(CLOCK_MONOTONIC, &xsel.tclick1);
   clock_gettime(CLOCK_MONOTONIC, &xsel.tclick2);
@@ -1641,7 +1645,12 @@ void run(void) {
     }
 
     if (dodraw) {
+      // If there are already enqueued X events process them.
+      // Otherwise flush the output buffer and read more X events into the queue.
       while (XPending(x_window.display)) {
+        // Pop the first event from the queue into `event`.
+        // If the queue is empty, flush the output buffer and wait until
+        // and event is received.
         XNextEvent(x_window.display, &event);
         if (XFilterEvent(&event, None))
           continue;
@@ -1650,6 +1659,8 @@ void run(void) {
       }
 
       draw();
+
+      // Flush the outbut buffer.
       XFlush(x_window.display);
 
       if (xev && !FD_ISSET(x_fd, &read_fds))

@@ -24,11 +24,11 @@ Size with all dependencies, excluding `glibc`:
 
 ## Black Window
 
-- LOC: 6,012
+- LOC: 5,314
 
 ## [st](http://st.suckless.org/)
 
-- LOC: 6,707
+- LOC: 6,490
 - implementation languages: C (80%), Objective-C (15%), Roff (3%), Makefile (2%)
 
 ## [scurvy](https://git.sr.ht/~sircmpwn/scurvy/)
