@@ -232,12 +232,10 @@ typedef struct {
 /* Fontcache is an array now. A new font will be appended to the array. */
 static Fontcache frc[16];
 static int frclen = 0;
-static char *usedfont = NULL;
 static double usedfontsize = 0;
 static double defaultfontsize = 0;
 
 static char **opt_slave = NULL;
-static char *opt_font = NULL;
 
 static int oldbutton = 3; /* button event on startup: 3 = release */
 
@@ -279,7 +277,7 @@ void zoom(const Arg *arg) {
 
 void zoomabs(const Arg *arg) {
   xunloadfonts();
-  xloadfonts(usedfont, arg->f);
+  xloadfonts(font, arg->f);
   cresize(0, 0);
   redraw();
   xhints();
@@ -910,8 +908,7 @@ void xinit(int cols, int rows) {
   if (!FcInit())
     die("could not init fontconfig.\n");
 
-  usedfont = (opt_font == NULL) ? font : opt_font;
-  xloadfonts(usedfont, 0);
+  xloadfonts(font, 0);
 
   /* colors */
   x_window.cmap = XDefaultColormap(x_window.display, x_window.screen);
@@ -1695,54 +1692,9 @@ void run(void) {
   }
 }
 
-void usage(void) {
-  die("usage: bw [-f font] command [args ...]\n");
-}
-
 int main(int argc, char **argv, char **envp) {
-  // parse optional arguments
-  for (argv++, argc--;
-       argv[0] && argv[0][0] == '-' && argv[0][1]; argc--, argv++) {
-
-    // stop on --
-    if (argv[0][1] == '-' && argv[0][2] == '\0') {
-      argv++;
-      argc--;
-      break;
-    }
-
-    char option = argv[0][1];
-    if (argv[0][2] != '\0') {
-      usage();
-      abort();
-    }
-
-    switch (option) {
-    case 'f':
-      if (argv[1] == NULL) {
-        usage();
-        abort();
-      }
-      argc--;
-      argv++;
-      switch (option) {
-      case 'f':
-        opt_font = argv[0];
-      }
-      break;
-    default:
-      usage();
-      abort();
-    }
-  }
-
-run:
-  if (argc == 0) {
-    usage();
-    abort();
-  }
-  if (argc > 0) /* eat all remaining arguments */
-    opt_slave = argv;
+  argv++, argc--; // Skip this program's name.
+  opt_slave = argv;
 
   // At program startup locale is set to "C".
   // We're overriding character classification locale here according to
