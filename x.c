@@ -108,8 +108,6 @@ typedef struct {
   Visual *visual;
   XSetWindowAttributes attrs;
   int screen;
-  int isfixed; /* Is fixed geometry? Initialized to 0 (false) as static memory.
-                */
   int left;
   int top;
 } XWindow;
@@ -731,11 +729,6 @@ void xhints(void) {
   sizeh->base_width = 2 * borderpx;
   sizeh->min_height = term_window.char_height + 2 * borderpx;
   sizeh->min_width = term_window.char_width + 2 * borderpx;
-  if (x_window.isfixed) {
-    sizeh->flags |= PMaxSize;
-    sizeh->min_width = sizeh->max_width = term_window.window_width;
-    sizeh->min_height = sizeh->max_height = term_window.window_height;
-  }
   XSetWMProperties(x_window.display, x_window.window, NULL, NULL, NULL, 0,
                    sizeh, &wm, &class);
   XFree(sizeh);
@@ -1705,7 +1698,7 @@ void run(void) {
 }
 
 void usage(void) {
-  die("usage: bw [-a] [-i] [-f font]"
+  die("usage: bw [-a] [-f font]"
       " [-w windowid] command [args ...]\n");
 }
 
@@ -1730,9 +1723,6 @@ int main(int argc, char **argv, char **envp) {
     switch (option) {
     case 'a':
       allowaltscreen = 0;
-      break;
-    case 'i':
-      x_window.isfixed = 1;
       break;
     case 'f':
     case 'w':
