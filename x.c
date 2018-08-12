@@ -237,7 +237,6 @@ static double usedfontsize = 0;
 static double defaultfontsize = 0;
 
 static char **opt_slave = NULL;
-static char *opt_embed = NULL;
 static char *opt_font = NULL;
 
 static int oldbutton = 3; /* button event on startup: 3 = release */
@@ -932,8 +931,7 @@ void xinit(int cols, int rows) {
                               ButtonReleaseMask;
   x_window.attrs.colormap = x_window.cmap;
 
-  if (!(opt_embed && (parent_window_id = strtol(opt_embed, NULL, 0))))
-    parent_window_id = XRootWindow(x_window.display, x_window.screen);
+  parent_window_id = XRootWindow(x_window.display, x_window.screen);
   x_window.window = XCreateWindow(
       x_window.display, parent_window_id, x_window.left, x_window.top,
       term_window.window_width, term_window.window_height, 0,
@@ -1698,8 +1696,7 @@ void run(void) {
 }
 
 void usage(void) {
-  die("usage: bw [-a] [-f font]"
-      " [-w windowid] command [args ...]\n");
+  die("usage: bw [-a] [-f font] command [args ...]\n");
 }
 
 int main(int argc, char **argv, char **envp) {
@@ -1725,7 +1722,6 @@ int main(int argc, char **argv, char **envp) {
       allowaltscreen = 0;
       break;
     case 'f':
-    case 'w':
       if (argv[1] == NULL) {
         usage();
         abort();
@@ -1735,9 +1731,6 @@ int main(int argc, char **argv, char **envp) {
       switch (option) {
       case 'f':
         opt_font = argv[0];
-        break;
-      case 'w':
-        opt_embed = argv[0];
       }
       break;
     default:
