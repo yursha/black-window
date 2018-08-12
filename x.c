@@ -99,7 +99,7 @@ typedef struct {
   Display *display;
   Colormap cmap;
   Window window;
-  Drawable buf;
+  Pixmap pixmap;
   XftGlyphFontSpec *specbuf; /* font spec buffer used for rendering */
   Atom xembed, wmdeletewin, netwmname, netwmpid;
   XIM xim;
@@ -623,12 +623,12 @@ void xresize(int col, int row) {
   term_window.tty_width = col * term_window.char_width;
   term_window.tty_height = row * term_window.char_height;
 
-  XFreePixmap(x_window.display, x_window.buf);
-  x_window.buf =
+  XFreePixmap(x_window.display, x_window.pixmap);
+  x_window.pixmap =
       XCreatePixmap(x_window.display, x_window.window, term_window.window_width,
                     term_window.window_height,
                     DefaultDepth(x_window.display, x_window.screen));
-  XftDrawChange(x_window.draw, x_window.buf);
+  XftDrawChange(x_window.draw, x_window.pixmap);
   xclear(0, 0, term_window.window_width, term_window.window_height);
 
   /* resize to new width */
@@ -891,10 +891,7 @@ void xunloadfonts(void) {
 }
 
 void xinit(int cols, int rows) {
-  // X graphic context values
-  XGCValues gcvalues;
   Cursor cursor_id;
-  Window parent_window_id;
   pid_t thispid = getpid();
   XColor xmousefg, xmousebg;
 
@@ -904,21 +901,19 @@ void xinit(int cols, int rows) {
   x_window.screen = XDefaultScreen(x_window.display);
   x_window.visual = XDefaultVisual(x_window.display, x_window.screen);
 
-  /* font */
+  // Load fonts.
   if (!FcInit())
     die("could not init fontconfig.\n");
-
   xloadfonts(font, 0);
 
-  /* colors */
+  // Load colors.
   x_window.cmap = XDefaultColormap(x_window.display, x_window.screen);
   xloadcols();
 
-  /* adjust fixed window geometry */
   term_window.window_width = 2 * borderpx + cols * term_window.char_width;
   term_window.window_height = 2 * borderpx + rows * term_window.char_height;
 
-  /* Events */
+  // Create window.
   x_window.attrs.background_pixel = drawing_context.col[defaultbg].pixel;
   x_window.attrs.border_pixel = drawing_context.col[defaultbg].pixel;
   x_window.attrs.bit_gravity = NorthWestGravity;
@@ -927,35 +922,36 @@ void xinit(int cols, int rows) {
                               ButtonMotionMask | ButtonPressMask |
                               ButtonReleaseMask;
   x_window.attrs.colormap = x_window.cmap;
-
-  parent_window_id = XRootWindow(x_window.display, x_window.screen);
+  Window parent_window_id = XRootWindow(x_window.display, x_window.screen);
   x_window.window = XCreateWindow(
       x_window.display, parent_window_id, x_window.left, x_window.top,
-      term_window.window_width, term_window.window_height, 0,
+      term_window.window_width, term_window.window_height, /*border_width=*/0,
       XDefaultDepth(x_window.display, x_window.screen), InputOutput,
       x_window.visual,
       CWBackPixel | CWBorderPixel | CWBitGravity | CWEventMask | CWColormap,
       &x_window.attrs);
 
+  // Create graphics context
+  XGCValues gcvalues;
   memset(&gcvalues, 0, sizeof(gcvalues));
   gcvalues.graphics_exposures = False;
   drawing_context.gc = XCreateGC(x_window.display, parent_window_id,
                                  GCGraphicsExposures, &gcvalues);
-  x_window.buf =
+  x_window.pixmap =
       XCreatePixmap(x_window.display, x_window.window, term_window.window_width,
                     term_window.window_height,
                     DefaultDepth(x_window.display, x_window.screen));
   XSetForeground(x_window.display, drawing_context.gc,
                  drawing_context.col[defaultbg].pixel);
-  XFillRectangle(x_window.display, x_window.buf, drawing_context.gc, 0, 0,
+  XFillRectangle(x_window.display, x_window.pixmap, drawing_context.gc, 0, 0,
                  term_window.window_width, term_window.window_height);
 
   /* font spec buffer */
   x_window.specbuf = xmalloc(cols * sizeof(XftGlyphFontSpec));
 
   /* Xft rendering context */
-  x_window.draw = XftDrawCreate(x_window.display, x_window.buf, x_window.visual,
-                                x_window.cmap);
+  x_window.draw = XftDrawCreate(x_window.display, x_window.pixmap,
+                                x_window.visual, x_window.cmap);
 
   /* input methods */
   if ((x_window.xim = XOpenIM(x_window.display, NULL, NULL, NULL)) == NULL) {
@@ -1405,8 +1401,9 @@ void xdrawline(Line line, int x1, int y1, int x2) {
 }
 
 void xfinishdraw(void) {
-  XCopyArea(x_window.display, x_window.buf, x_window.window, drawing_context.gc,
-            0, 0, term_window.window_width, term_window.window_height, 0, 0);
+  XCopyArea(x_window.display, x_window.pixmap, x_window.window,
+            drawing_context.gc, 0, 0, term_window.window_width,
+            term_window.window_height, 0, 0);
   XSetForeground(
       x_window.display, drawing_context.gc,
       drawing_context.col[IS_SET(MODE_REVERSE) ? defaultfg : defaultbg].pixel);
@@ -1696,16 +1693,7 @@ int main(int argc, char **argv, char **envp) {
   argv++, argc--; // Skip this program's name.
   opt_slave = argv;
 
-  // At program startup locale is set to "C".
-  // We're overriding character classification locale here according to
-  // environment variables. In glibc the following environment variables
-  // are checked in order:
-  //  - LC_ALL
-  //  - LC_CTYPE
-  //  - LANG
-  //
-  // On ArchLinux LANG is usually set to en_US.UTF-8.
-  setlocale(LC_CTYPE, "");
+  setlocale(LC_CTYPE, "en_US.UTF-8");
 
   // The only supported modifies is `im` (input method).
   // Here we explicitly specify implementation-dependent default.
