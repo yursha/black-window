@@ -110,9 +110,8 @@ typedef struct {
   int screen;
   int isfixed; /* Is fixed geometry? Initialized to 0 (false) as static memory.
                 */
-  int left,
-      top; /* Left and top offsets. Initialized to (0,0) as static memory. */
-  int gm;  /* geometry mask */
+  int left;
+  int top;
 } XWindow;
 
 typedef struct {
@@ -737,29 +736,9 @@ void xhints(void) {
     sizeh->min_width = sizeh->max_width = term_window.window_width;
     sizeh->min_height = sizeh->max_height = term_window.window_height;
   }
-  if (x_window.gm & (XValue | YValue)) {
-    sizeh->flags |= USPosition | PWinGravity;
-    sizeh->x = x_window.left;
-    sizeh->y = x_window.top;
-    sizeh->win_gravity = xgeommasktogravity(x_window.gm);
-  }
-
   XSetWMProperties(x_window.display, x_window.window, NULL, NULL, NULL, 0,
                    sizeh, &wm, &class);
   XFree(sizeh);
-}
-
-int xgeommasktogravity(int mask) {
-  switch (mask & (XNegative | YNegative)) {
-  case 0:
-    return NorthWestGravity;
-  case XNegative:
-    return NorthEastGravity;
-  case YNegative:
-    return SouthWestGravity;
-  }
-
-  return SouthEastGravity;
 }
 
 int xloadfont(FontDescriptor *f, FcPattern *pattern) {
@@ -949,12 +928,6 @@ void xinit(int cols, int rows) {
   /* adjust fixed window geometry */
   term_window.window_width = 2 * borderpx + cols * term_window.char_width;
   term_window.window_height = 2 * borderpx + rows * term_window.char_height;
-  if (x_window.gm & XNegative)
-    x_window.left += DisplayWidth(x_window.display, x_window.screen) -
-                     term_window.window_width - 2;
-  if (x_window.gm & YNegative)
-    x_window.top += DisplayHeight(x_window.display, x_window.screen) -
-                    term_window.window_height - 2;
 
   /* Events */
   x_window.attrs.background_pixel = drawing_context.col[defaultbg].pixel;
@@ -1732,7 +1705,7 @@ void run(void) {
 }
 
 void usage(void) {
-  die("usage: bw [-a] [-i] [-f font] [-g geometry]"
+  die("usage: bw [-a] [-i] [-f font]"
       " [-w windowid] command [args ...]\n");
 }
 
@@ -1762,7 +1735,6 @@ int main(int argc, char **argv, char **envp) {
       x_window.isfixed = 1;
       break;
     case 'f':
-    case 'g':
     case 'w':
       if (argv[1] == NULL) {
         usage();
@@ -1773,10 +1745,6 @@ int main(int argc, char **argv, char **envp) {
       switch (option) {
       case 'f':
         opt_font = argv[0];
-        break;
-      case 'g':
-        x_window.gm = XParseGeometry(argv[0], &x_window.left, &x_window.top,
-                                     &cols, &rows);
         break;
       case 'w':
         opt_embed = argv[0];
