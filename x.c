@@ -165,16 +165,16 @@ static void xseturgency(int);
 static int evcol(XEvent *);
 static int evrow(XEvent *);
 
-static void expose(XEvent *);
-static void visibility(XEvent *);
-static void unmap(XEvent *);
-static void kpress(XEvent *);
-static void cmessage(XEvent *);
-static void resize(XEvent *);
-static void focus(XEvent *);
-static void brelease(XEvent *);
-static void bpress(XEvent *);
-static void bmotion(XEvent *);
+static void handle_expose_event(XEvent *);
+static void handle_visibility_event(XEvent *);
+static void handle_unmap_event(XEvent *);
+static void handle_key_press_event(XEvent *);
+static void handle_client_message_event(XEvent *);
+static void handle_configure_event(XEvent *);
+static void handle_focus_event(XEvent *);
+static void handle_mouse_button_release_event(XEvent *);
+static void handle_mouse_button_press_event(XEvent *);
+static void handle_mouse_motion_event(XEvent *);
 static void propnotify(XEvent *);
 static void selnotify(XEvent *);
 static void selclear_(XEvent *);
@@ -189,17 +189,17 @@ static void run(void);
 static void usage(void);
 
 static void (*handler[LASTEvent])(XEvent *) = {
-    [KeyPress] = kpress,
-    [ClientMessage] = cmessage,
-    [ConfigureNotify] = resize,
-    [VisibilityNotify] = visibility,
-    [UnmapNotify] = unmap,
-    [Expose] = expose,
-    [FocusIn] = focus,
-    [FocusOut] = focus,
-    [MotionNotify] = bmotion,
-    [ButtonPress] = bpress,
-    [ButtonRelease] = brelease,
+    [KeyPress] = handle_key_press_event,
+    [ClientMessage] = handle_client_message_event,
+    [ConfigureNotify] = handle_configure_event,
+    [VisibilityNotify] = handle_visibility_event,
+    [UnmapNotify] = handle_unmap_event,
+    [Expose] = handle_expose_event,
+    [FocusIn] = handle_focus_event,
+    [FocusOut] = handle_focus_event,
+    [MotionNotify] = handle_mouse_motion_event,
+    [ButtonPress] = handle_mouse_button_press_event,
+    [ButtonRelease] = handle_mouse_button_release_event,
     /*
      * Uncomment if you want the selection to disappear when you select
      * something different in another window.
@@ -378,7 +378,8 @@ void mousereport(XEvent *e) {
   ttywrite(buf, len, 0);
 }
 
-void bpress(XEvent *e) {
+void handle_mouse_button_press_event(XEvent *e) {
+  fprintf(stderr, "mouse button pressed\n");
   struct timespec now;
   MouseShortcut *ms;
   int snap;
@@ -580,7 +581,8 @@ void setsel(char *str, Time t) {
 
 void xsetsel(char *str) { setsel(str, CurrentTime); }
 
-void brelease(XEvent *e) {
+void handle_mouse_button_release_event(XEvent *e) {
+  fprintf(stderr, "mouse button released\n");
   if (IS_SET(MODE_MOUSE) && !(e->xbutton.state & forceselmod)) {
     mousereport(e);
     return;
@@ -592,7 +594,8 @@ void brelease(XEvent *e) {
     mousesel(e, 1);
 }
 
-void bmotion(XEvent *e) {
+void handle_mouse_motion_event(XEvent *e) {
+  fprintf(stderr, "mouse motion\n");
   if (IS_SET(MODE_MOUSE) && !(e->xbutton.state & forceselmod)) {
     mousereport(e);
     return;
@@ -632,7 +635,8 @@ void xresize(int col, int row) {
   xclear(0, 0, term_window.window_width, term_window.window_height);
 
   /* resize to new width */
-  x_window.glyph_font_specs = xrealloc(x_window.glyph_font_specs, col * sizeof(XftGlyphFontSpec));
+  x_window.glyph_font_specs =
+      xrealloc(x_window.glyph_font_specs, col * sizeof(XftGlyphFontSpec));
 }
 
 ushort sixd_to_16bit(int x) { return x == 0 ? 0 : 0x3737 + 0x2828 * x; }
@@ -948,15 +952,19 @@ void xinit(int cols, int rows) {
 
   /* Xft rendering context */
   x_window.xft_draw = XftDrawCreate(x_window.display, x_window.pixmap,
-                                x_window.visual, x_window.cmap);
+                                    x_window.visual, x_window.cmap);
 
   /* input methods */
-  if ((x_window.input_method = XOpenIM(x_window.display, /*resource database=*/NULL, /*application_resource_name=*/NULL, /*application_class_name=*/NULL)) == NULL) {
+  if ((x_window.input_method =
+           XOpenIM(x_window.display, /*resource database=*/NULL,
+                   /*application_resource_name=*/NULL,
+                   /*application_class_name=*/NULL)) == NULL) {
     XSetLocaleModifiers("@im=local");
-    if ((x_window.input_method = XOpenIM(x_window.display, NULL, NULL, NULL)) == NULL) {
+    if ((x_window.input_method = XOpenIM(x_window.display, NULL, NULL, NULL)) ==
+        NULL) {
       XSetLocaleModifiers("@im=");
-      if ((x_window.input_method = XOpenIM(x_window.display, NULL, NULL, NULL)) ==
-          NULL) {
+      if ((x_window.input_method =
+               XOpenIM(x_window.display, NULL, NULL, NULL)) == NULL) {
         die("XOpenIM failed. Could not open input"
             " device.\n");
       }
@@ -1258,7 +1266,8 @@ void x_draw_glyph_font_specs(const XftGlyphFontSpec *specs, Character base,
            term_window.window_height);
 
   /* Clean up the region we want to draw to. */
-  XftDrawRect(x_window.xft_draw, bg, winx, winy, width, term_window.char_height);
+  XftDrawRect(x_window.xft_draw, bg, winx, winy, width,
+              term_window.char_height);
 
   /* Set the clip region because Xft is sometimes dirty. */
   r.x = 0;
@@ -1272,8 +1281,8 @@ void x_draw_glyph_font_specs(const XftGlyphFontSpec *specs, Character base,
 
   /* Render underline and strikethrough. */
   if (base.mode & ATTR_UNDERLINE) {
-    XftDrawRect(x_window.xft_draw, fg, winx, winy + drawing_context.font.ascent + 1,
-                width, 1);
+    XftDrawRect(x_window.xft_draw, fg, winx,
+                winy + drawing_context.font.ascent + 1, width, 1);
   }
 
   if (base.mode & ATTR_STRUCK) {
@@ -1396,15 +1405,22 @@ void xfinishdraw(void) {
       drawing_context.col[IS_SET(MODE_REVERSE) ? defaultfg : defaultbg].pixel);
 }
 
-void expose(XEvent *ev) { redraw(); }
+void handle_expose_event(XEvent *ev) {
+  fprintf(stderr, "exposure\n");
+  redraw();
+}
 
-void visibility(XEvent *ev) {
+void handle_visibility_event(XEvent *ev) {
+  fprintf(stderr, "visibility event\n");
   XVisibilityEvent *e = &ev->xvisibility;
 
   MODBIT(term_window.mode, e->state != VisibilityFullyObscured, MODE_VISIBLE);
 }
 
-void unmap(XEvent *ev) { term_window.mode &= ~MODE_VISIBLE; }
+void handle_unmap_event(XEvent *ev) {
+  fprintf(stderr, "unmap event\n");
+  term_window.mode &= ~MODE_VISIBLE;
+}
 
 void xsetpointermotion(int set) {
   MODBIT(x_window.attrs.event_mask, set, PointerMotionMask);
@@ -1434,7 +1450,8 @@ void xbell(void) {
     XkbBell(x_window.display, x_window.window, bellvolume, (Atom)NULL);
 }
 
-void focus(XEvent *ev) {
+void handle_focus_event(XEvent *ev) {
+  fprintf(stderr, "focus event\n");
   XFocusChangeEvent *e = &ev->xfocus;
 
   if (e->mode == NotifyGrab)
@@ -1493,7 +1510,8 @@ char *kmap(KeySym k, uint state) {
   return NULL;
 }
 
-void kpress(XEvent *ev) {
+void handle_key_press_event(XEvent *ev) {
+  fprintf(stderr, "key press\n");
   XKeyEvent *e = &ev->xkey;
   KeySym ksym;
   char buf[32], *customkey;
@@ -1505,7 +1523,8 @@ void kpress(XEvent *ev) {
   if (IS_SET(MODE_KBDLOCK))
     return;
 
-  len = XmbLookupString(x_window.input_context, e, buf, sizeof buf, &ksym, &status);
+  len = XmbLookupString(x_window.input_context, e, buf, sizeof buf, &ksym,
+                        &status);
   /* 1. shortcuts */
   for (bp = shortcuts; bp < shortcuts + LEN(shortcuts); bp++) {
     if (ksym == bp->keysym && match(bp->mod, e->state)) {
@@ -1538,7 +1557,8 @@ void kpress(XEvent *ev) {
   ttywrite(buf, len, 1);
 }
 
-void cmessage(XEvent *e) {
+void handle_client_message_event(XEvent *e) {
+  fprintf(stderr, "client message\n");
   /*
    * See xembed specs
    *  http://standards.freedesktop.org/xembed-spec/xembed-spec-latest.html
@@ -1556,7 +1576,8 @@ void cmessage(XEvent *e) {
   }
 }
 
-void resize(XEvent *e) {
+void handle_configure_event(XEvent *e) {
+  fprintf(stderr, "configure (resize) event\n");
   if (e->xconfigure.width == term_window.window_width &&
       e->xconfigure.height == term_window.window_height)
     return;
@@ -1615,7 +1636,7 @@ void run(void) {
       die("select failed: %s\n", strerror(errno));
     }
     if (FD_ISSET(tty_master_fd, &read_fds)) {
-      tty_read();
+      read_from_tty_slave();
       if (blinktimeout) {
         blinkset = tattrset(ATTR_BLINK);
         if (!blinkset)
@@ -1646,7 +1667,8 @@ void run(void) {
 
     if (dodraw) {
       // If there are already enqueued X events process them.
-      // Otherwise flush the output buffer and read more X events into the queue.
+      // Otherwise flush the output buffer and read more X events into the
+      // queue.
       while (XPending(x_window.display)) {
         // Pop the first event from the queue into `event`.
         // If the queue is empty, flush the output buffer and wait until

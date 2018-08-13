@@ -74,7 +74,7 @@ void tresize(int, int);
 void tsetdirtattr(int);
 void ttyhangup(void);
 int tty_new(char **);
-size_t tty_read(void);
+size_t read_from_tty_slave(void);
 void ttyresize(int, int);
 void ttywrite(const char *, size_t, int);
 

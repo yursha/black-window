@@ -116,13 +116,13 @@ typedef struct {
   TCursor cursor; /* cursor */
   int old_cursor_x;
   int old_cursor_y;
-  int top;         /* top    scroll limit */
-  int bot;         /* bottom scroll limit */
-  int mode;        /* terminal mode flags */
-  int esc;         /* escape state flags */
-  char trantbl[4]; /* charset table translation */
-  int charset;     /* current charset */
-  int icharset;    /* selected charset for sequence */
+  int top;                /* top    scroll limit */
+  int bot;                /* bottom scroll limit */
+  int mode;               /* terminal mode flags */
+  int escape_state_flags; /* escape state flags */
+  char trantbl[4];        /* charset table translation */
+  int charset;            /* current charset */
+  int icharset;           /* selected charset for sequence */
   int *tabs;
 } Terminal;
 
@@ -153,12 +153,12 @@ static void ttywriteraw(const char *, size_t);
 static void csidump(void);
 static void csihandle(void);
 static void csiparse(void);
-static void csireset(void);
-static int eschandle(uchar);
+static void csi_escape_sequence_clear(void);
+static int escape_sequence_handle(uchar);
 static void strdump(void);
-static void strhandle(void);
-static void strparse(void);
-static void strreset(void);
+static void str_escape_sequence_handle(void);
+static void str_escape_sequence_parse(void);
+static void str_escape_sequence_reset(void);
 
 static void tdumpsel(void);
 static void tdumpline(int);
@@ -170,11 +170,11 @@ static void tdeleteline(int);
 static void tinsertblank(int);
 static void tinsertblankline(int);
 static int tlinelen(int);
-static void tmoveto(int, int);
+static void terminal_move_to(int, int);
 static void tmoveato(int, int);
-static void tnewline(int);
-static void tputtab(int);
-static void tputc(uint32_t);
+static void terminal_new_line(int);
+static void write_tab_to_terminal(int);
+static void write_code_point_to_terminal(uint32_t);
 static void treset(void);
 static void tscrollup(int, int);
 static void tscrolldown(int, int);
@@ -184,14 +184,14 @@ static void tsetdirt(int, int);
 static void tsetscroll(int, int);
 static void tswapscreen(void);
 static void tsetmode(int, int, int *, int);
-static int twrite(const char *, int, int);
+static int write_to_terminal(const char *, int, int);
 static void tfulldirt(void);
-static void tcontrolcode(uchar);
+static void write_control_code_point_to_terminal(uchar);
 static void tdectest(char);
 static void tdefutf8(char);
 static int32_t tdefcolor(int *, int *, int);
 static void tdeftran(char);
-static void tstrsequence(uchar);
+static void terminal_str_escape_sequence_handle(uchar);
 
 static void drawregion(int, int, int, int);
 
@@ -214,7 +214,7 @@ static ssize_t xwrite(int, const char *, size_t);
 static Terminal terminal;
 static Selection sel;
 static CSIEscape csi_escape_sequence;
-static STREscape strescseq;
+static STREscape str_escape_sequence;
 static int tty_master_fd;
 static pid_t pid;
 
@@ -652,7 +652,7 @@ int tty_new(char **slave_args) {
   return tty_master_fd;
 }
 
-size_t tty_read(void) {
+size_t read_from_tty_slave(void) {
   static char buffer[BUFSIZ]; // 8192 bytes
   static int length = 0;
 
@@ -662,7 +662,7 @@ size_t tty_read(void) {
     die("couldn't read from slave: %s\n", strerror(errno));
   length += bytes_read;
 
-  int bytes_written = twrite(buffer, length, 0);
+  int bytes_written = write_to_terminal(buffer, length, /*should_show_ctrl=*/0);
   length -= bytes_written;
   /* keep any uncomplete utf8 char for the next call */
   if (length > 0)
@@ -675,7 +675,7 @@ void ttywrite(const char *s, size_t n, int may_echo) {
   const char *next;
 
   if (may_echo && IS_SET(MODE_ECHO))
-    twrite(s, n, 1);
+    write_to_terminal(s, n, /*should_show_ctrl=*/1);
 
   if (!IS_SET(MODE_CRLF)) {
     ttywriteraw(s, n);
@@ -735,7 +735,7 @@ void ttywriteraw(const char *s, size_t n) {
          * again. Empty it.
          */
         if (n < lim)
-          lim = tty_read();
+          lim = read_from_tty_slave();
         n -= r;
         s += r;
       } else {
@@ -744,7 +744,7 @@ void ttywriteraw(const char *s, size_t n) {
       }
     }
     if (FD_ISSET(tty_master_fd, &rfd))
-      lim = tty_read();
+      lim = read_from_tty_slave();
   }
   return;
 
@@ -814,7 +814,7 @@ void tcursor(int mode) {
     cursor[alt] = terminal.cursor;
   } else if (mode == CURSOR_LOAD) {
     terminal.cursor = cursor[alt];
-    tmoveto(cursor[alt].x, cursor[alt].y);
+    terminal_move_to(cursor[alt].x, cursor[alt].y);
   }
 }
 
@@ -837,7 +837,7 @@ void treset(void) {
   terminal.charset = 0;
 
   for (i = 0; i < 2; i++) {
-    tmoveto(0, 0);
+    terminal_move_to(0, 0);
     tcursor(CURSOR_SAVE);
     tclearregion(0, 0, terminal.col - 1, terminal.row - 1);
     tswapscreen();
@@ -918,7 +918,7 @@ void selscroll(int orig, int n) {
   }
 }
 
-void tnewline(int first_col) {
+void terminal_new_line(int first_col) {
   int y = terminal.cursor.y;
 
   if (y == terminal.bot) {
@@ -926,7 +926,7 @@ void tnewline(int first_col) {
   } else {
     y++;
   }
-  tmoveto(first_col ? 0 : terminal.cursor.x, y);
+  terminal_move_to(first_col ? 0 : terminal.cursor.x, y);
 }
 
 void csiparse(void) {
@@ -960,10 +960,11 @@ void csiparse(void) {
 
 /* for absolute user moves, when decom is set */
 void tmoveato(int x, int y) {
-  tmoveto(x, y + ((terminal.cursor.state & CURSOR_ORIGIN) ? terminal.top : 0));
+  terminal_move_to(
+      x, y + ((terminal.cursor.state & CURSOR_ORIGIN) ? terminal.top : 0));
 }
 
-void tmoveto(int x, int y) {
+void terminal_move_to(int x, int y) {
   int miny, maxy;
 
   if (terminal.cursor.state & CURSOR_ORIGIN) {
@@ -1372,12 +1373,14 @@ void csihandle() {
     break;
   case 'A': /* CUU -- Cursor <n> Up */
     DEFAULT(csi_escape_sequence.arg[0], 1);
-    tmoveto(terminal.cursor.x, terminal.cursor.y - csi_escape_sequence.arg[0]);
+    terminal_move_to(terminal.cursor.x,
+                     terminal.cursor.y - csi_escape_sequence.arg[0]);
     break;
   case 'B': /* CUD -- Cursor <n> Down */
   case 'e': /* VPR --Cursor <n> Down */
     DEFAULT(csi_escape_sequence.arg[0], 1);
-    tmoveto(terminal.cursor.x, terminal.cursor.y + csi_escape_sequence.arg[0]);
+    terminal_move_to(terminal.cursor.x,
+                     terminal.cursor.y + csi_escape_sequence.arg[0]);
     break;
   case 'c': /* DA -- Device Attributes */
     if (csi_escape_sequence.arg[0] == 0)
@@ -1386,19 +1389,21 @@ void csihandle() {
   case 'C': /* CUF -- Cursor <n> Forward */
   case 'a': /* HPR -- Cursor <n> Forward */
     DEFAULT(csi_escape_sequence.arg[0], 1);
-    tmoveto(terminal.cursor.x + csi_escape_sequence.arg[0], terminal.cursor.y);
+    terminal_move_to(terminal.cursor.x + csi_escape_sequence.arg[0],
+                     terminal.cursor.y);
     break;
   case 'D': /* CUB -- Cursor <n> Backward */
     DEFAULT(csi_escape_sequence.arg[0], 1);
-    tmoveto(terminal.cursor.x - csi_escape_sequence.arg[0], terminal.cursor.y);
+    terminal_move_to(terminal.cursor.x - csi_escape_sequence.arg[0],
+                     terminal.cursor.y);
     break;
   case 'E': /* CNL -- Cursor <n> Down and first col */
     DEFAULT(csi_escape_sequence.arg[0], 1);
-    tmoveto(0, terminal.cursor.y + csi_escape_sequence.arg[0]);
+    terminal_move_to(0, terminal.cursor.y + csi_escape_sequence.arg[0]);
     break;
   case 'F': /* CPL -- Cursor <n> Up and first col */
     DEFAULT(csi_escape_sequence.arg[0], 1);
-    tmoveto(0, terminal.cursor.y - csi_escape_sequence.arg[0]);
+    terminal_move_to(0, terminal.cursor.y - csi_escape_sequence.arg[0]);
     break;
   case 'g': /* TBC -- Tabulation clear */
     switch (csi_escape_sequence.arg[0]) {
@@ -1415,7 +1420,7 @@ void csihandle() {
   case 'G': /* CHA -- Move to <col> */
   case '`': /* HPA */
     DEFAULT(csi_escape_sequence.arg[0], 1);
-    tmoveto(csi_escape_sequence.arg[0] - 1, terminal.cursor.y);
+    terminal_move_to(csi_escape_sequence.arg[0] - 1, terminal.cursor.y);
     break;
   case 'H': /* CUP -- Move to <row> <col> */
   case 'f': /* HVP */
@@ -1425,7 +1430,7 @@ void csihandle() {
     break;
   case 'I': /* CHT -- Cursor Forward Tabulation <n> tab stops */
     DEFAULT(csi_escape_sequence.arg[0], 1);
-    tputtab(csi_escape_sequence.arg[0]);
+    write_tab_to_terminal(csi_escape_sequence.arg[0]);
     break;
   case 'J': /* ED -- Clear screen */
     switch (csi_escape_sequence.arg[0]) {
@@ -1495,7 +1500,7 @@ void csihandle() {
     break;
   case 'Z': /* CBT -- Cursor Backward Tabulation <n> tab stops */
     DEFAULT(csi_escape_sequence.arg[0], 1);
-    tputtab(-csi_escape_sequence.arg[0]);
+    write_tab_to_terminal(-csi_escape_sequence.arg[0]);
     break;
   case 'd': /* VPA -- Move to <row> */
     DEFAULT(csi_escape_sequence.arg[0], 1);
@@ -1557,32 +1562,33 @@ void csidump(void) {
   putc('\n', stderr);
 }
 
-void csireset(void) {
+void csi_escape_sequence_clear() {
   memset(&csi_escape_sequence, 0, sizeof(csi_escape_sequence));
 }
 
-void strhandle(void) {
+void str_escape_sequence_handle() {
   char *p = NULL;
-  int j, narg, par;
+  int j;
 
-  terminal.esc &= ~(ESC_STR_END | ESC_STR);
-  strparse();
-  par = (narg = strescseq.narg) ? atoi(strescseq.args[0]) : 0;
+  terminal.escape_state_flags &= ~(ESC_STR_END | ESC_STR);
+  str_escape_sequence_parse();
+  int narg = str_escape_sequence.narg;
+  int par = narg ? atoi(str_escape_sequence.args[0]) : 0;
 
-  switch (strescseq.type) {
+  switch (str_escape_sequence.type) {
   case ']': /* OSC -- Operating System Command */
     switch (par) {
     case 0:
     case 1:
     case 2:
       if (narg > 1)
-        xsettitle(strescseq.args[1]);
+        xsettitle(str_escape_sequence.args[1]);
       return;
     case 52:
       if (narg > 2) {
         char *dec;
 
-        dec = base64dec(strescseq.args[2]);
+        dec = base64dec(str_escape_sequence.args[2]);
         if (dec) {
           xsetsel(dec);
           xclipcopy();
@@ -1594,10 +1600,10 @@ void strhandle(void) {
     case 4: /* color set */
       if (narg < 3)
         break;
-      p = strescseq.args[2];
+      p = str_escape_sequence.args[2];
       /* FALLTHROUGH */
     case 104: /* color reset, here p = NULL */
-      j = (narg > 1) ? atoi(strescseq.args[1]) : -1;
+      j = (narg > 1) ? atoi(str_escape_sequence.args[1]) : -1;
       if (xsetcolorname(j, p)) {
         fprintf(stderr, "erresc: invalid color %s\n", p);
       } else {
@@ -1611,11 +1617,14 @@ void strhandle(void) {
     }
     break;
   case 'k': /* old title set compatibility */
-    xsettitle(strescseq.args[0]);
+    xsettitle(str_escape_sequence.args[0]);
     return;
   case 'P': /* DCS -- Device Control String */
     terminal.mode |= ESC_DCS;
+    return;
   case '_': /* APC -- Application Program Command */
+    printf("Application Program Command => %s\n", str_escape_sequence.args[0]);
+    return;
   case '^': /* PM -- Privacy Message */
     return;
   }
@@ -1624,18 +1633,18 @@ void strhandle(void) {
   strdump();
 }
 
-void strparse(void) {
+void str_escape_sequence_parse() {
   int c;
-  char *p = strescseq.buf;
+  char *p = str_escape_sequence.buf;
 
-  strescseq.narg = 0;
-  strescseq.buf[strescseq.len] = '\0';
+  str_escape_sequence.narg = 0;
+  str_escape_sequence.buf[str_escape_sequence.len] = '\0';
 
   if (*p == '\0')
     return;
 
-  while (strescseq.narg < STR_ARG_SIZ) {
-    strescseq.args[strescseq.narg++] = p;
+  while (str_escape_sequence.narg < STR_ARG_SIZ) {
+    str_escape_sequence.args[str_escape_sequence.narg++] = p;
     while ((c = *p) != ';' && c != '\0')
       ++p;
     if (c == '\0')
@@ -1648,9 +1657,9 @@ void strdump(void) {
   int i;
   uint c;
 
-  fprintf(stderr, "ESC%c", strescseq.type);
-  for (i = 0; i < strescseq.len; i++) {
-    c = strescseq.buf[i] & 0xff;
+  fprintf(stderr, "ESC%c", str_escape_sequence.type);
+  for (i = 0; i < str_escape_sequence.len; i++) {
+    c = str_escape_sequence.buf[i] & 0xff;
     if (c == '\0') {
       putc('\n', stderr);
       return;
@@ -1669,7 +1678,9 @@ void strdump(void) {
   fprintf(stderr, "ESC\\\n");
 }
 
-void strreset(void) { memset(&strescseq, 0, sizeof(strescseq)); }
+void str_escape_sequence_reset(void) {
+  memset(&str_escape_sequence, 0, sizeof(str_escape_sequence));
+}
 
 void sendbreak(const Arg *arg) {
   if (tcsendbreak(tty_master_fd, 0))
@@ -1695,7 +1706,7 @@ void iso14755(const Arg *arg) {
   ttywrite(uc, utf8_encode(utf32, uc), 1);
 }
 
-void tputtab(int n) {
+void write_tab_to_terminal(int n) {
   uint x = terminal.cursor.x;
 
   if (n > 0) {
@@ -1740,13 +1751,12 @@ void tdectest(char c) {
   }
 }
 
-void tstrsequence(uchar c) {
-  strreset();
-
+void terminal_str_escape_sequence_handle(uchar c) {
+  str_escape_sequence_reset();
   switch (c) {
   case 0x90: /* DCS -- Device Control String */
     c = 'P';
-    terminal.esc |= ESC_DCS;
+    terminal.escape_state_flags |= ESC_DCS;
     break;
   case 0x9f: /* APC -- Application Program Command */
     c = '_';
@@ -1758,39 +1768,39 @@ void tstrsequence(uchar c) {
     c = ']';
     break;
   }
-  strescseq.type = c;
-  terminal.esc |= ESC_STR;
+  str_escape_sequence.type = c;
+  terminal.escape_state_flags |= ESC_STR;
 }
 
-void tcontrolcode(uchar ascii) {
+void write_control_code_point_to_terminal(uchar ascii) {
   switch (ascii) {
   case '\t': /* HT */
-    tputtab(1);
+    write_tab_to_terminal(1);
     return;
   case '\b': /* BS */
-    tmoveto(terminal.cursor.x - 1, terminal.cursor.y);
+    terminal_move_to(terminal.cursor.x - 1, terminal.cursor.y);
     return;
   case '\r': /* CR */
-    tmoveto(0, terminal.cursor.y);
+    terminal_move_to(0, terminal.cursor.y);
     return;
-  case '\f': /* LF */
-  case '\v': /* VT */
+  case '\f': /* FF (form feed) */
+  case '\v': /* VT (vertical tab) */
   case '\n': /* LF */
     /* go to first col if the mode is set */
-    tnewline(IS_SET(MODE_CRLF));
+    terminal_new_line(IS_SET(MODE_CRLF));
     return;
   case '\a': /* BEL */
-    if (terminal.esc & ESC_STR_END) {
+    if (terminal.escape_state_flags & ESC_STR_END) {
       /* backwards compatibility to xterm */
-      strhandle();
+      str_escape_sequence_handle();
     } else {
       xbell();
     }
     break;
   case '\033': /* ESC */
-    csireset();
-    terminal.esc &= ~(ESC_CSI | ESC_ALTCHARSET | ESC_TEST);
-    terminal.esc |= ESC_START;
+    csi_escape_sequence_clear();
+    terminal.escape_state_flags &= ~(ESC_CSI | ESC_ALTCHARSET | ESC_TEST);
+    terminal.escape_state_flags |= ESC_START;
     return;
   case '\016': /* SO (LS1 -- Locking shift 1) */
   case '\017': /* SI (LS0 -- Locking shift 0) */
@@ -1799,7 +1809,7 @@ void tcontrolcode(uchar ascii) {
   case '\032': /* SUB */
     tsetchar('?', &terminal.cursor.attr, terminal.cursor.x, terminal.cursor.y);
   case '\030': /* CAN */
-    csireset();
+    csi_escape_sequence_clear();
     break;
   case '\005': /* ENQ (IGNORED) */
   case '\000': /* NUL (IGNORED) */
@@ -1813,8 +1823,8 @@ void tcontrolcode(uchar ascii) {
   case 0x83: /* TODO: NBH */
   case 0x84: /* TODO: IND */
     break;
-  case 0x85:     /* NEL -- Next line */
-    tnewline(1); /* always go to first col */
+  case 0x85:              /* NEL -- Next line */
+    terminal_new_line(1); /* always go to first col */
     break;
   case 0x86: /* TODO: SSA */
   case 0x87: /* TODO: ESA */
@@ -1849,34 +1859,34 @@ void tcontrolcode(uchar ascii) {
   case 0x9d: /* OSC -- Operating System Command */
   case 0x9e: /* PM -- Privacy Message */
   case 0x9f: /* APC -- Application Program Command */
-    tstrsequence(ascii);
+    terminal_str_escape_sequence_handle(ascii);
     return;
   }
   /* only CAN, SUB, \a and C1 chars interrupt a sequence */
-  terminal.esc &= ~(ESC_STR_END | ESC_STR);
+  terminal.escape_state_flags &= ~(ESC_STR_END | ESC_STR);
 }
 
 /*
  * returns 1 when the sequence is finished and it hasn't to read
  * more characters for this sequence, otherwise 0
  */
-int eschandle(uchar ascii) {
+int escape_sequence_handle(uchar ascii) {
   switch (ascii) {
   case '[':
-    terminal.esc |= ESC_CSI;
+    terminal.escape_state_flags |= ESC_CSI;
     return 0;
   case '#':
-    terminal.esc |= ESC_TEST;
+    terminal.escape_state_flags |= ESC_TEST;
     return 0;
   case '%':
-    terminal.esc |= ESC_UTF8;
+    terminal.escape_state_flags |= ESC_UTF8;
     return 0;
   case 'P': /* DCS -- Device Control String */
   case '_': /* APC -- Application Program Command */
   case '^': /* PM -- Privacy Message */
   case ']': /* OSC -- Operating System Command */
   case 'k': /* old title set compatibility */
-    tstrsequence(ascii);
+    terminal_str_escape_sequence_handle(ascii);
     return 0;
   case 'n': /* LS2 -- Locking shift 2 */
   case 'o': /* LS3 -- Locking shift 3 */
@@ -1887,17 +1897,17 @@ int eschandle(uchar ascii) {
   case '*': /* G2D4 -- set tertiary charset G2 */
   case '+': /* G3D4 -- set quaternary charset G3 */
     terminal.icharset = ascii - '(';
-    terminal.esc |= ESC_ALTCHARSET;
+    terminal.escape_state_flags |= ESC_ALTCHARSET;
     return 0;
   case 'D': /* IND -- Linefeed */
     if (terminal.cursor.y == terminal.bot) {
       tscrollup(terminal.top, 1);
     } else {
-      tmoveto(terminal.cursor.x, terminal.cursor.y + 1);
+      terminal_move_to(terminal.cursor.x, terminal.cursor.y + 1);
     }
     break;
-  case 'E':      /* NEL -- Next line */
-    tnewline(1); /* always go to first col */
+  case 'E':               /* NEL -- Next line */
+    terminal_new_line(1); /* always go to first col */
     break;
   case 'H': /* HTS -- Horizontal tab stop */
     terminal.tabs[terminal.cursor.x] = 1;
@@ -1906,7 +1916,7 @@ int eschandle(uchar ascii) {
     if (terminal.cursor.y == terminal.top) {
       tscrolldown(terminal.top, 1);
     } else {
-      tmoveto(terminal.cursor.x, terminal.cursor.y - 1);
+      terminal_move_to(terminal.cursor.x, terminal.cursor.y - 1);
     }
     break;
   case 'Z': /* DECID -- Identify Terminal */
@@ -1930,8 +1940,8 @@ int eschandle(uchar ascii) {
     tcursor(CURSOR_LOAD);
     break;
   case '\\': /* ST -- String Terminator */
-    if (terminal.esc & ESC_STR_END)
-      strhandle();
+    if (terminal.escape_state_flags & ESC_STR_END)
+      str_escape_sequence_handle();
     break;
   default:
     fprintf(stderr, "erresc: unknown sequence ESC 0x%02X '%c'\n", (uchar)ascii,
@@ -1941,7 +1951,7 @@ int eschandle(uchar ascii) {
   return 1;
 }
 
-void tputc(uint32_t utf32_code_point) {
+void write_code_point_to_terminal(uint32_t utf32_code_point) {
   char utf8_char[UTF8_MAX_CHAR_SIZE];
   int width;
   int utf8_char_size;
@@ -1965,19 +1975,20 @@ void tputc(uint32_t utf32_code_point) {
    * receives a ESC, a SUB, a ST or any other C1 control
    * character.
    */
-  if (terminal.esc & ESC_STR) {
-    if (utf32_code_point == '\a' || utf32_code_point == 030 ||
-        utf32_code_point == 032 || utf32_code_point == 033 ||
+  if (terminal.escape_state_flags & ESC_STR) {
+    if (utf32_code_point == 007 /*BEL*/ || utf32_code_point == 030 /*CAN*/ ||
+        utf32_code_point == 032 /*SUB*/ || utf32_code_point == 033 /*ESC*/ ||
         ISCONTROLC1(utf32_code_point)) {
-      terminal.esc &= ~(ESC_START | ESC_STR | ESC_DCS);
-      terminal.esc |= ESC_STR_END;
+      terminal.escape_state_flags &= ~(ESC_START | ESC_STR | ESC_DCS);
+      terminal.escape_state_flags |= ESC_STR_END;
       goto check_control_code;
     }
 
-    if (strescseq.len + utf8_char_size >= sizeof(strescseq.buf) - 1) {
+    if (str_escape_sequence.len + utf8_char_size >=
+        sizeof(str_escape_sequence.buf) - 1) {
       /*
        * Here is a bug in terminals. If the user never sends
-       * some code to stop the str or esc command, then st
+       * some code to stop the str or esc command, then bw
        * will stop responding. But this is better than
        * silently failing with unknown characters. At least
        * then users will report back.
@@ -1985,14 +1996,15 @@ void tputc(uint32_t utf32_code_point) {
        * In the case users ever get fixed, here is the code:
        */
       /*
-       * terminal.esc = 0;
-       * strhandle();
+       * terminal.escape_state_flags = 0;
+       * str_escape_sequence_handle();
        */
       return;
     }
 
-    memmove(&strescseq.buf[strescseq.len], utf8_char, utf8_char_size);
-    strescseq.len += utf8_char_size;
+    memmove(&str_escape_sequence.buf[str_escape_sequence.len], utf8_char,
+            utf8_char_size);
+    str_escape_sequence.len += utf8_char_size;
     return;
   }
 
@@ -2003,33 +2015,38 @@ check_control_code:
    * they must not cause conflicts with sequences.
    */
   if (is_control_character) {
-    tcontrolcode(utf32_code_point);
+    write_control_code_point_to_terminal(utf32_code_point);
     /*
      * control codes are not shown ever
      */
     return;
-  } else if (terminal.esc & ESC_START) {
-    if (terminal.esc & ESC_CSI) {
+  } else if (terminal.escape_state_flags &
+             ESC_START) { // handle escape sequence
+    if (terminal.escape_state_flags & ESC_CSI) {
+      fprintf(stderr, "ESC_CSI\n");
       csi_escape_sequence.buf[csi_escape_sequence.len++] = utf32_code_point;
       if (BETWEEN(utf32_code_point, 0x40, 0x7E) ||
           csi_escape_sequence.len >= sizeof(csi_escape_sequence.buf) - 1) {
-        terminal.esc = 0;
+        terminal.escape_state_flags = 0;
         csiparse();
         csihandle();
       }
       return;
-    } else if (terminal.esc & ESC_UTF8) {
+    } else if (terminal.escape_state_flags & ESC_UTF8) {
+      fprintf(stderr, "ESC_UTF8\n");
       tdefutf8(utf32_code_point);
-    } else if (terminal.esc & ESC_ALTCHARSET) {
+    } else if (terminal.escape_state_flags & ESC_ALTCHARSET) {
+      fprintf(stderr, "ESC_ALTCHARSET\n");
       tdeftran(utf32_code_point);
-    } else if (terminal.esc & ESC_TEST) {
+    } else if (terminal.escape_state_flags & ESC_TEST) {
+      fprintf(stderr, "ESC_TEST\n");
       tdectest(utf32_code_point);
     } else {
-      if (!eschandle(utf32_code_point))
+      if (!escape_sequence_handle(utf32_code_point))
         return;
       /* sequence already finished */
     }
-    terminal.esc = 0;
+    terminal.escape_state_flags = 0;
     /*
      * All characters which form part of a sequence are not
      * printed
@@ -2042,7 +2059,7 @@ check_control_code:
   gp = &terminal.line[terminal.cursor.y][terminal.cursor.x];
   if (IS_SET(MODE_WRAP) && (terminal.cursor.state & CURSOR_WRAPNEXT)) {
     gp->mode |= ATTR_WRAP;
-    tnewline(1);
+    terminal_new_line(1);
     gp = &terminal.line[terminal.cursor.y][terminal.cursor.x];
   }
 
@@ -2051,7 +2068,7 @@ check_control_code:
             (terminal.col - terminal.cursor.x - width) * sizeof(Character));
 
   if (terminal.cursor.x + width > terminal.col) {
-    tnewline(1);
+    terminal_new_line(1);
     gp = &terminal.line[terminal.cursor.y][terminal.cursor.x];
   }
 
@@ -2066,13 +2083,13 @@ check_control_code:
     }
   }
   if (terminal.cursor.x + width < terminal.col) {
-    tmoveto(terminal.cursor.x + width, terminal.cursor.y);
+    terminal_move_to(terminal.cursor.x + width, terminal.cursor.y);
   } else {
     terminal.cursor.state |= CURSOR_WRAPNEXT;
   }
 }
 
-int twrite(const char *buffer, int length, int show_ctrl) {
+int write_to_terminal(const char *buffer, int length, int show_ctrl) {
   int bytes_written = 0;
   int charsize;
   for (; bytes_written < length; bytes_written += charsize) {
@@ -2088,17 +2105,18 @@ int twrite(const char *buffer, int length, int show_ctrl) {
       charsize = 1;
     }
     if (show_ctrl && ISCONTROL(utf32_code_point)) {
+      fprintf(stderr, "Control char: %x\n", utf32_code_point);
       if (utf32_code_point & 0x80) {
         utf32_code_point &= 0x7f;
-        tputc('^');
-        tputc('[');
+        write_code_point_to_terminal('^');
+        write_code_point_to_terminal('[');
       } else if (utf32_code_point != '\n' && utf32_code_point != '\r' &&
                  utf32_code_point != '\t') {
         utf32_code_point ^= 0x40;
-        tputc('^');
+        write_code_point_to_terminal('^');
       }
     }
-    tputc(utf32_code_point);
+    write_code_point_to_terminal(utf32_code_point);
   }
   return bytes_written;
 }
@@ -2171,8 +2189,8 @@ void tresize(int col, int row) {
   terminal.row = row;
   /* reset scrolling region */
   tsetscroll(0, row - 1);
-  /* make use of the LIMIT in tmoveto */
-  tmoveto(terminal.cursor.x, terminal.cursor.y);
+  /* make use of the LIMIT in terminal_move_to */
+  terminal_move_to(terminal.cursor.x, terminal.cursor.y);
   /* Clearing both screens (it makes dirty all lines) */
   cursor = terminal.cursor;
   for (i = 0; i < 2; i++) {
