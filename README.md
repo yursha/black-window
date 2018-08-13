@@ -13,3 +13,7 @@ Black Window is a minimalistic X11 *terminal emulator* for pseudo-terminal devic
 - `fontconfig` (`libfontconfig`)
 - `freetype2` (`libfreetype`)
 - `X11` (`libX11`).
+
+## Readings
+
+- https://www.ecma-international.org/publications/standards/Ecma-048.htm
