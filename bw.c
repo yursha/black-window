@@ -33,9 +33,7 @@
 #define NUMMAXLEN(x) ((int)(sizeof(x) * 2.56 + 0.5) + 1)
 
 /* https://en.wikipedia.org/wiki/C0_and_C1_control_codes */
-#define ISCONTROLC0(c) (BETWEEN(c, 0, 0x1f) || (c) == '\177') // ISO646 (ASCII)
-#define ISCONTROLC1(c) (BETWEEN(c, 0x80, 0x9f))               // ECMA-48
-#define ISCONTROL(c) (ISCONTROLC0(c) || ISCONTROLC1(c))
+#define ISCONTROLC0(c) (BETWEEN(c, 0, 0x1f) || (c) == '\177')
 
 #define ISDELIM(utf32_code_point)                                              \
   (utf8strchr(worddelimiters, utf32_code_point) != NULL)
@@ -126,34 +124,32 @@ typedef struct {
   int *tabs;
 } Terminal;
 
-/* CSI Escape sequence structs */
-/* ESC '[' [[ [<priv>] <arg> [;]] <mode> [<mode>]] */
+// ESC '[' [[ [<priv>] <arg> [;]] <mode> [<mode>]]
 typedef struct {
-  char buf[ESC_BUF_SIZ]; /* raw string */
-  int len;               /* raw string length */
+  char data[ESC_BUF_SIZ]; /* raw string */
+  int data_length;        /* raw string length */
   char priv;
   int arg[ESC_ARG_SIZ];
   int narg; /* nb of args */
   char mode[2];
-} CSIEscape;
+} ControlSequence;
 
-/* STR Escape sequence structs */
 /* ESC type [[ [<priv>] <arg> [;]] <mode>] ESC '\' */
 typedef struct {
-  char type;             /* ESC type ... */
-  char buf[STR_BUF_SIZ]; /* raw string */
-  int len;               /* raw string length */
+  char type;              /* ESC type ... */
+  char data[STR_BUF_SIZ]; /* raw string */
+  int data_length;        /* raw string length */
   char *args[STR_ARG_SIZ];
   int narg; /* nb of args */
-} STREscape;
+} StrEscapeSequence;
 
 static void sigchld(int);
 static void ttywriteraw(const char *, size_t);
 
 static void csidump(void);
-static void csihandle(void);
-static void csiparse(void);
-static void csi_escape_sequence_clear(void);
+static void control_sequence_handle(void);
+static void control_sequence_parse(void);
+static void control_sequence_clear(void);
 static int escape_sequence_handle(uchar);
 static void strdump(void);
 static void str_escape_sequence_handle(void);
@@ -186,7 +182,7 @@ static void tswapscreen(void);
 static void tsetmode(int, int, int *, int);
 static int write_to_terminal(const char *, int, int);
 static void tfulldirt(void);
-static void write_control_code_point_to_terminal(uchar);
+static void terminal_apply_c0_control(uchar);
 static void tdectest(char);
 static void tdefutf8(char);
 static int32_t tdefcolor(int *, int *, int);
@@ -213,8 +209,8 @@ static ssize_t xwrite(int, const char *, size_t);
 /* Globals */
 static Terminal terminal;
 static Selection sel;
-static CSIEscape csi_escape_sequence;
-static STREscape str_escape_sequence;
+static ControlSequence control_sequence;
+static StrEscapeSequence str_escape_sequence;
 static int tty_master_fd;
 static pid_t pid;
 
@@ -929,33 +925,34 @@ void terminal_new_line(int first_col) {
   terminal_move_to(first_col ? 0 : terminal.cursor.x, y);
 }
 
-void csiparse(void) {
-  char *p = csi_escape_sequence.buf, *np;
+void control_sequence_parse() {
+  char *p = control_sequence.data;
+  char *np;
   long int v;
 
-  csi_escape_sequence.narg = 0;
+  control_sequence.narg = 0;
   if (*p == '?') {
-    csi_escape_sequence.priv = 1;
+    control_sequence.priv = 1;
     p++;
   }
 
-  csi_escape_sequence.buf[csi_escape_sequence.len] = '\0';
-  while (p < csi_escape_sequence.buf + csi_escape_sequence.len) {
+  control_sequence.data[control_sequence.data_length] = '\0';
+  while (p < control_sequence.data + control_sequence.data_length) {
     np = NULL;
     v = strtol(p, &np, 10);
     if (np == p)
       v = 0;
     if (v == LONG_MAX || v == LONG_MIN)
       v = -1;
-    csi_escape_sequence.arg[csi_escape_sequence.narg++] = v;
+    control_sequence.arg[control_sequence.narg++] = v;
     p = np;
-    if (*p != ';' || csi_escape_sequence.narg == ESC_ARG_SIZ)
+    if (*p != ';' || control_sequence.narg == ESC_ARG_SIZ)
       break;
     p++;
   }
-  csi_escape_sequence.mode[0] = *p++;
-  csi_escape_sequence.mode[1] =
-      (p < csi_escape_sequence.buf + csi_escape_sequence.len) ? *p : '\0';
+  control_sequence.mode[0] = *p++;
+  control_sequence.mode[1] =
+      (p < control_sequence.data + control_sequence.data_length) ? *p : '\0';
 }
 
 /* for absolute user moves, when decom is set */
@@ -1356,57 +1353,57 @@ void tsetmode(int priv, int set, int *args, int narg) {
   }
 }
 
-void csihandle() {
+void control_sequence_handle() {
   char buf[40];
   int len;
 
-  switch (csi_escape_sequence.mode[0]) {
+  switch (control_sequence.mode[0]) {
   default:
   unknown:
-    fprintf(stderr, "erresc: unknown csi ");
+    fprintf(stderr, "control_sequence_handle: unknown csi ");
     csidump();
     /* die(""); */
     break;
   case '@': /* ICH -- Insert <n> blank char */
-    DEFAULT(csi_escape_sequence.arg[0], 1);
-    tinsertblank(csi_escape_sequence.arg[0]);
+    DEFAULT(control_sequence.arg[0], 1);
+    tinsertblank(control_sequence.arg[0]);
     break;
   case 'A': /* CUU -- Cursor <n> Up */
-    DEFAULT(csi_escape_sequence.arg[0], 1);
+    DEFAULT(control_sequence.arg[0], 1);
     terminal_move_to(terminal.cursor.x,
-                     terminal.cursor.y - csi_escape_sequence.arg[0]);
+                     terminal.cursor.y - control_sequence.arg[0]);
     break;
   case 'B': /* CUD -- Cursor <n> Down */
   case 'e': /* VPR --Cursor <n> Down */
-    DEFAULT(csi_escape_sequence.arg[0], 1);
+    DEFAULT(control_sequence.arg[0], 1);
     terminal_move_to(terminal.cursor.x,
-                     terminal.cursor.y + csi_escape_sequence.arg[0]);
+                     terminal.cursor.y + control_sequence.arg[0]);
     break;
   case 'c': /* DA -- Device Attributes */
-    if (csi_escape_sequence.arg[0] == 0)
-      ttywrite(vtiden, strlen(vtiden), 0);
+    if (control_sequence.arg[0] == 0)
+      ttywrite(vtiden, strlen(vtiden), /*may_echo=*/0);
     break;
   case 'C': /* CUF -- Cursor <n> Forward */
   case 'a': /* HPR -- Cursor <n> Forward */
-    DEFAULT(csi_escape_sequence.arg[0], 1);
-    terminal_move_to(terminal.cursor.x + csi_escape_sequence.arg[0],
+    DEFAULT(control_sequence.arg[0], 1);
+    terminal_move_to(terminal.cursor.x + control_sequence.arg[0],
                      terminal.cursor.y);
     break;
   case 'D': /* CUB -- Cursor <n> Backward */
-    DEFAULT(csi_escape_sequence.arg[0], 1);
-    terminal_move_to(terminal.cursor.x - csi_escape_sequence.arg[0],
+    DEFAULT(control_sequence.arg[0], 1);
+    terminal_move_to(terminal.cursor.x - control_sequence.arg[0],
                      terminal.cursor.y);
     break;
   case 'E': /* CNL -- Cursor <n> Down and first col */
-    DEFAULT(csi_escape_sequence.arg[0], 1);
-    terminal_move_to(0, terminal.cursor.y + csi_escape_sequence.arg[0]);
+    DEFAULT(control_sequence.arg[0], 1);
+    terminal_move_to(0, terminal.cursor.y + control_sequence.arg[0]);
     break;
   case 'F': /* CPL -- Cursor <n> Up and first col */
-    DEFAULT(csi_escape_sequence.arg[0], 1);
-    terminal_move_to(0, terminal.cursor.y - csi_escape_sequence.arg[0]);
+    DEFAULT(control_sequence.arg[0], 1);
+    terminal_move_to(0, terminal.cursor.y - control_sequence.arg[0]);
     break;
   case 'g': /* TBC -- Tabulation clear */
-    switch (csi_escape_sequence.arg[0]) {
+    switch (control_sequence.arg[0]) {
     case 0: /* clear current tab stop */
       terminal.tabs[terminal.cursor.x] = 0;
       break;
@@ -1419,21 +1416,21 @@ void csihandle() {
     break;
   case 'G': /* CHA -- Move to <col> */
   case '`': /* HPA */
-    DEFAULT(csi_escape_sequence.arg[0], 1);
-    terminal_move_to(csi_escape_sequence.arg[0] - 1, terminal.cursor.y);
+    DEFAULT(control_sequence.arg[0], 1);
+    terminal_move_to(control_sequence.arg[0] - 1, terminal.cursor.y);
     break;
   case 'H': /* CUP -- Move to <row> <col> */
   case 'f': /* HVP */
-    DEFAULT(csi_escape_sequence.arg[0], 1);
-    DEFAULT(csi_escape_sequence.arg[1], 1);
-    tmoveato(csi_escape_sequence.arg[1] - 1, csi_escape_sequence.arg[0] - 1);
+    DEFAULT(control_sequence.arg[0], 1);
+    DEFAULT(control_sequence.arg[1], 1);
+    tmoveato(control_sequence.arg[1] - 1, control_sequence.arg[0] - 1);
     break;
   case 'I': /* CHT -- Cursor Forward Tabulation <n> tab stops */
-    DEFAULT(csi_escape_sequence.arg[0], 1);
-    write_tab_to_terminal(csi_escape_sequence.arg[0]);
+    DEFAULT(control_sequence.arg[0], 1);
+    write_tab_to_terminal(control_sequence.arg[0]);
     break;
   case 'J': /* ED -- Clear screen */
-    switch (csi_escape_sequence.arg[0]) {
+    switch (control_sequence.arg[0]) {
     case 0: /* below */
       tclearregion(terminal.cursor.x, terminal.cursor.y, terminal.col - 1,
                    terminal.cursor.y);
@@ -1455,7 +1452,7 @@ void csihandle() {
     }
     break;
   case 'K': /* EL -- Clear line */
-    switch (csi_escape_sequence.arg[0]) {
+    switch (control_sequence.arg[0]) {
     case 0: /* right */
       tclearregion(terminal.cursor.x, terminal.cursor.y, terminal.col - 1,
                    terminal.cursor.y);
@@ -1469,65 +1466,64 @@ void csihandle() {
     }
     break;
   case 'S': /* SU -- Scroll <n> line up */
-    DEFAULT(csi_escape_sequence.arg[0], 1);
-    tscrollup(terminal.top, csi_escape_sequence.arg[0]);
+    DEFAULT(control_sequence.arg[0], 1);
+    tscrollup(terminal.top, control_sequence.arg[0]);
     break;
   case 'T': /* SD -- Scroll <n> line down */
-    DEFAULT(csi_escape_sequence.arg[0], 1);
-    tscrolldown(terminal.top, csi_escape_sequence.arg[0]);
+    DEFAULT(control_sequence.arg[0], 1);
+    tscrolldown(terminal.top, control_sequence.arg[0]);
     break;
   case 'L': /* IL -- Insert <n> blank lines */
-    DEFAULT(csi_escape_sequence.arg[0], 1);
-    tinsertblankline(csi_escape_sequence.arg[0]);
+    DEFAULT(control_sequence.arg[0], 1);
+    tinsertblankline(control_sequence.arg[0]);
     break;
   case 'l': /* RM -- Reset Mode */
-    tsetmode(csi_escape_sequence.priv, 0, csi_escape_sequence.arg,
-             csi_escape_sequence.narg);
+    tsetmode(control_sequence.priv, 0, control_sequence.arg,
+             control_sequence.narg);
     break;
   case 'M': /* DL -- Delete <n> lines */
-    DEFAULT(csi_escape_sequence.arg[0], 1);
-    tdeleteline(csi_escape_sequence.arg[0]);
+    DEFAULT(control_sequence.arg[0], 1);
+    tdeleteline(control_sequence.arg[0]);
     break;
   case 'X': /* ECH -- Erase <n> char */
-    DEFAULT(csi_escape_sequence.arg[0], 1);
+    DEFAULT(control_sequence.arg[0], 1);
     tclearregion(terminal.cursor.x, terminal.cursor.y,
-                 terminal.cursor.x + csi_escape_sequence.arg[0] - 1,
+                 terminal.cursor.x + control_sequence.arg[0] - 1,
                  terminal.cursor.y);
     break;
   case 'P': /* DCH -- Delete <n> char */
-    DEFAULT(csi_escape_sequence.arg[0], 1);
-    tdeletechar(csi_escape_sequence.arg[0]);
+    DEFAULT(control_sequence.arg[0], 1);
+    tdeletechar(control_sequence.arg[0]);
     break;
   case 'Z': /* CBT -- Cursor Backward Tabulation <n> tab stops */
-    DEFAULT(csi_escape_sequence.arg[0], 1);
-    write_tab_to_terminal(-csi_escape_sequence.arg[0]);
+    DEFAULT(control_sequence.arg[0], 1);
+    write_tab_to_terminal(-control_sequence.arg[0]);
     break;
   case 'd': /* VPA -- Move to <row> */
-    DEFAULT(csi_escape_sequence.arg[0], 1);
-    tmoveato(terminal.cursor.x, csi_escape_sequence.arg[0] - 1);
+    DEFAULT(control_sequence.arg[0], 1);
+    tmoveato(terminal.cursor.x, control_sequence.arg[0] - 1);
     break;
   case 'h': /* SM -- Set terminal mode */
-    tsetmode(csi_escape_sequence.priv, 1, csi_escape_sequence.arg,
-             csi_escape_sequence.narg);
+    tsetmode(control_sequence.priv, 1, control_sequence.arg,
+             control_sequence.narg);
     break;
   case 'm': /* SGR -- Terminal attribute (color) */
-    tsetattr(csi_escape_sequence.arg, csi_escape_sequence.narg);
+    tsetattr(control_sequence.arg, control_sequence.narg);
     break;
   case 'n': /* DSR – Device Status Report (cursor position) */
-    if (csi_escape_sequence.arg[0] == 6) {
+    if (control_sequence.arg[0] == 6) {
       len = snprintf(buf, sizeof(buf), "\033[%i;%iR", terminal.cursor.y + 1,
                      terminal.cursor.x + 1);
-      ttywrite(buf, len, 0);
+      ttywrite(buf, len, /*may_echo=*/0);
     }
     break;
   case 'r': /* DECSTBM -- Set Scrolling Region */
-    if (csi_escape_sequence.priv) {
+    if (control_sequence.priv) {
       goto unknown;
     } else {
-      DEFAULT(csi_escape_sequence.arg[0], 1);
-      DEFAULT(csi_escape_sequence.arg[1], terminal.row);
-      tsetscroll(csi_escape_sequence.arg[0] - 1,
-                 csi_escape_sequence.arg[1] - 1);
+      DEFAULT(control_sequence.arg[0], 1);
+      DEFAULT(control_sequence.arg[1], terminal.row);
+      tsetscroll(control_sequence.arg[0] - 1, control_sequence.arg[1] - 1);
       tmoveato(0, 0);
     }
     break;
@@ -1545,8 +1541,8 @@ void csidump(void) {
   uint c;
 
   fprintf(stderr, "ESC[");
-  for (i = 0; i < csi_escape_sequence.len; i++) {
-    c = csi_escape_sequence.buf[i] & 0xff;
+  for (i = 0; i < control_sequence.data_length; i++) {
+    c = control_sequence.data[i] & 0xff;
     if (isprint(c)) {
       putc(c, stderr);
     } else if (c == '\n') {
@@ -1562,8 +1558,8 @@ void csidump(void) {
   putc('\n', stderr);
 }
 
-void csi_escape_sequence_clear() {
-  memset(&csi_escape_sequence, 0, sizeof(csi_escape_sequence));
+void control_sequence_clear() {
+  memset(&control_sequence, 0, sizeof(control_sequence));
 }
 
 void str_escape_sequence_handle() {
@@ -1635,10 +1631,10 @@ void str_escape_sequence_handle() {
 
 void str_escape_sequence_parse() {
   int c;
-  char *p = str_escape_sequence.buf;
+  char *p = str_escape_sequence.data;
 
   str_escape_sequence.narg = 0;
-  str_escape_sequence.buf[str_escape_sequence.len] = '\0';
+  str_escape_sequence.data[str_escape_sequence.data_length] = '\0';
 
   if (*p == '\0')
     return;
@@ -1658,8 +1654,8 @@ void strdump(void) {
   uint c;
 
   fprintf(stderr, "ESC%c", str_escape_sequence.type);
-  for (i = 0; i < str_escape_sequence.len; i++) {
-    c = str_escape_sequence.buf[i] & 0xff;
+  for (i = 0; i < str_escape_sequence.data_length; i++) {
+    c = str_escape_sequence.data[i] & 0xff;
     if (c == '\0') {
       putc('\n', stderr);
       return;
@@ -1703,7 +1699,7 @@ void iso14755(const Arg *arg) {
   if ((utf32 = strtoul(us, &e, 16)) == ULONG_MAX || (*e != '\n' && *e != '\0'))
     return;
 
-  ttywrite(uc, utf8_encode(utf32, uc), 1);
+  ttywrite(uc, utf8_encode(utf32, uc), /*may_echo=*/1);
 }
 
 void write_tab_to_terminal(int n) {
@@ -1772,7 +1768,7 @@ void terminal_str_escape_sequence_handle(uchar c) {
   terminal.escape_state_flags |= ESC_STR;
 }
 
-void write_control_code_point_to_terminal(uchar ascii) {
+void terminal_apply_c0_control(uchar ascii) {
   switch (ascii) {
   case '\t': /* HT */
     write_tab_to_terminal(1);
@@ -1798,7 +1794,7 @@ void write_control_code_point_to_terminal(uchar ascii) {
     }
     break;
   case '\033': /* ESC */
-    csi_escape_sequence_clear();
+    control_sequence_clear();
     terminal.escape_state_flags &= ~(ESC_CSI | ESC_ALTCHARSET | ESC_TEST);
     terminal.escape_state_flags |= ESC_START;
     return;
@@ -1809,57 +1805,13 @@ void write_control_code_point_to_terminal(uchar ascii) {
   case '\032': /* SUB */
     tsetchar('?', &terminal.cursor.attr, terminal.cursor.x, terminal.cursor.y);
   case '\030': /* CAN */
-    csi_escape_sequence_clear();
+    control_sequence_clear();
     break;
   case '\005': /* ENQ (IGNORED) */
   case '\000': /* NUL (IGNORED) */
   case '\021': /* XON (IGNORED) */
   case '\023': /* XOFF (IGNORED) */
   case 0177:   /* DEL (IGNORED) */
-    return;
-  case 0x80: /* TODO: PAD */
-  case 0x81: /* TODO: HOP */
-  case 0x82: /* TODO: BPH */
-  case 0x83: /* TODO: NBH */
-  case 0x84: /* TODO: IND */
-    break;
-  case 0x85:              /* NEL -- Next line */
-    terminal_new_line(1); /* always go to first col */
-    break;
-  case 0x86: /* TODO: SSA */
-  case 0x87: /* TODO: ESA */
-    break;
-  case 0x88: /* HTS -- Horizontal tab stop */
-    terminal.tabs[terminal.cursor.x] = 1;
-    break;
-  case 0x89: /* TODO: HTJ */
-  case 0x8a: /* TODO: VTS */
-  case 0x8b: /* TODO: PLD */
-  case 0x8c: /* TODO: PLU */
-  case 0x8d: /* TODO: RI */
-  case 0x8e: /* TODO: SS2 */
-  case 0x8f: /* TODO: SS3 */
-  case 0x91: /* TODO: PU1 */
-  case 0x92: /* TODO: PU2 */
-  case 0x93: /* TODO: STS */
-  case 0x94: /* TODO: CCH */
-  case 0x95: /* TODO: MW */
-  case 0x96: /* TODO: SPA */
-  case 0x97: /* TODO: EPA */
-  case 0x98: /* TODO: SOS */
-  case 0x99: /* TODO: SGCI */
-    break;
-  case 0x9a: /* DECID -- Identify Terminal */
-    ttywrite(vtiden, strlen(vtiden), 0);
-    break;
-  case 0x9b: /* TODO: CSI */
-  case 0x9c: /* TODO: ST */
-    break;
-  case 0x90: /* DCS -- Device Control String */
-  case 0x9d: /* OSC -- Operating System Command */
-  case 0x9e: /* PM -- Privacy Message */
-  case 0x9f: /* APC -- Application Program Command */
-    terminal_str_escape_sequence_handle(ascii);
     return;
   }
   /* only CAN, SUB, \a and C1 chars interrupt a sequence */
@@ -1920,7 +1872,7 @@ int escape_sequence_handle(uchar ascii) {
     }
     break;
   case 'Z': /* DECID -- Identify Terminal */
-    ttywrite(vtiden, strlen(vtiden), 0);
+    ttywrite(vtiden, strlen(vtiden), /*may_echo=*/0);
     break;
   case 'c': /* RIS -- Reset to inital state */
     treset();
@@ -1957,7 +1909,16 @@ void write_code_point_to_terminal(uint32_t utf32_code_point) {
   int utf8_char_size;
   Character *gp;
 
-  int is_control_character = ISCONTROL(utf32_code_point);
+  if (0x80 <= utf32_code_point && utf32_code_point <= 0x9f) {
+    die("Error: 1-byte representations of C1 control functions "
+        "are not supported. Encountered C1 control function represented "
+        "by byte %x. Change terminal slave to use 2-byte representation, "
+        "if you can. Otherwise, implement handling of 1-byte C1 control "
+        "functions in terminal master\n",
+        utf32_code_point);
+  }
+
+  int is_control_character = ISCONTROLC0(utf32_code_point);
   if (terminal.mode & MODE_UTF8) {
     utf8_char_size = utf8_encode(utf32_code_point, utf8_char);
     if (!is_control_character && (width = wcwidth(utf32_code_point)) == -1) {
@@ -1977,15 +1938,14 @@ void write_code_point_to_terminal(uint32_t utf32_code_point) {
    */
   if (terminal.escape_state_flags & ESC_STR) {
     if (utf32_code_point == 007 /*BEL*/ || utf32_code_point == 030 /*CAN*/ ||
-        utf32_code_point == 032 /*SUB*/ || utf32_code_point == 033 /*ESC*/ ||
-        ISCONTROLC1(utf32_code_point)) {
+        utf32_code_point == 032 /*SUB*/ || utf32_code_point == 033 /*ESC*/) {
       terminal.escape_state_flags &= ~(ESC_START | ESC_STR | ESC_DCS);
       terminal.escape_state_flags |= ESC_STR_END;
       goto check_control_code;
     }
 
-    if (str_escape_sequence.len + utf8_char_size >=
-        sizeof(str_escape_sequence.buf) - 1) {
+    if (str_escape_sequence.data_length + utf8_char_size >=
+        sizeof(str_escape_sequence.data) - 1) {
       /*
        * Here is a bug in terminals. If the user never sends
        * some code to stop the str or esc command, then bw
@@ -2002,9 +1962,9 @@ void write_code_point_to_terminal(uint32_t utf32_code_point) {
       return;
     }
 
-    memmove(&str_escape_sequence.buf[str_escape_sequence.len], utf8_char,
-            utf8_char_size);
-    str_escape_sequence.len += utf8_char_size;
+    memmove(&str_escape_sequence.data[str_escape_sequence.data_length],
+            utf8_char, utf8_char_size);
+    str_escape_sequence.data_length += utf8_char_size;
     return;
   }
 
@@ -2015,7 +1975,7 @@ check_control_code:
    * they must not cause conflicts with sequences.
    */
   if (is_control_character) {
-    write_control_code_point_to_terminal(utf32_code_point);
+    terminal_apply_c0_control(utf32_code_point);
     /*
      * control codes are not shown ever
      */
@@ -2023,13 +1983,12 @@ check_control_code:
   } else if (terminal.escape_state_flags &
              ESC_START) { // handle escape sequence
     if (terminal.escape_state_flags & ESC_CSI) {
-      fprintf(stderr, "ESC_CSI\n");
-      csi_escape_sequence.buf[csi_escape_sequence.len++] = utf32_code_point;
+      control_sequence.data[control_sequence.data_length++] = utf32_code_point;
       if (BETWEEN(utf32_code_point, 0x40, 0x7E) ||
-          csi_escape_sequence.len >= sizeof(csi_escape_sequence.buf) - 1) {
+          control_sequence.data_length >= sizeof(control_sequence.data) - 1) {
         terminal.escape_state_flags = 0;
-        csiparse();
-        csihandle();
+        control_sequence_parse();
+        control_sequence_handle();
       }
       return;
     } else if (terminal.escape_state_flags & ESC_UTF8) {
@@ -2104,7 +2063,7 @@ int write_to_terminal(const char *buffer, int length, int show_ctrl) {
       utf32_code_point = buffer[bytes_written] & 0xFF;
       charsize = 1;
     }
-    if (show_ctrl && ISCONTROL(utf32_code_point)) {
+    if (show_ctrl && ISCONTROLC0(utf32_code_point)) {
       fprintf(stderr, "Control char: %x\n", utf32_code_point);
       if (utf32_code_point & 0x80) {
         utf32_code_point &= 0x7f;
