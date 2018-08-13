@@ -1,30 +1,3 @@
-## Some _random program_ complains that bw is unknown/not recognised/unsupported/whatever!
-
-It means that bw doesn’t have any terminfo entry on your system. Chances are
-you did not `make install`. If you just want to test it without installing it,
-you can manually run `tic -sx bw.info`.
-
-## Nothing works, and nothing is said about an unknown terminal!
-
-* Some programs just assume they’re running in xterm i.e. they don’t rely on
-  terminfo. What you see is the current state of the “xterm compliance”.
-* Some programs don’t complain about the lacking bw description and default to
-  another terminal. In that case see the question about terminfo.
-
-## I get some weird glitches/visual bug on _random program_!
-
-Try launching it with a different TERM: $ TERM=xterm myapp. toe(1) will give
-you a list of available terminals, but you’ll most likely switch between xterm,
-bw or bw-256color. The default value for TERM can be changed in config.h
-(TNAME).
-
-## How do I scroll back up?
-
-Using a terminal multiplexer.
-
-* `bw -e tmux` using C-b [
-* `bw -e screen` using C-a ESC
-
 ## Why doesn't the Del key work in some programs?
 
 Taken from the terminfo manpage:
@@ -85,14 +58,6 @@ Putting these lines into your .zshrc will fix the problems.
 St supports meta in 8bit mode, but the default terminfo entry doesn't
 use this capability. If you want it, you have to use the 'bw-meta' value
 in TERM.
-
-## I cannot compile bw in OpenBSD
-
-OpenBSD lacks librt, despite it being mandatory in POSIX
-<http://pubs.opengroup.org/onlinepubs/9699919799/utilities/c99.html#tag_20_11_13>.
-If you want to compile bw for OpenBSD you have to remove -lrt from config.mk, and
-bw will compile without any loss of functionality, because all the functions are
-included in libc on this platform.
 
 ## The Backspace Case
 

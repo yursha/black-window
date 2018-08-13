@@ -42,7 +42,7 @@ install: bw
 	mkdir -p $(DESTDIR)$(MANPREFIX)/man1
 	cp bw.1 $(DESTDIR)$(MANPREFIX)/man1/bw.1
 	chmod 644 $(DESTDIR)$(MANPREFIX)/man1/bw.1
-	tic -sx bw.info
+	tic -sx bw.info # Compile terminfo entry. Read with toe (1).
 	@echo Please see the README file regarding the terminfo entry of bw.
 
 uninstall:
