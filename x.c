@@ -375,11 +375,10 @@ void mousereport(XEvent *e) {
     return;
   }
 
-  ttywrite(buf, len, 0);
+  ttywrite(buf, len, /*may_echo=*/0);
 }
 
 void handle_mouse_button_press_event(XEvent *e) {
-  fprintf(stderr, "mouse button pressed\n");
   struct timespec now;
   MouseShortcut *ms;
   int snap;
@@ -391,7 +390,7 @@ void handle_mouse_button_press_event(XEvent *e) {
 
   for (ms = mshortcuts; ms < mshortcuts + LEN(mshortcuts); ms++) {
     if (e->xbutton.button == ms->b && match(ms->mask, e->xbutton.state)) {
-      ttywrite(ms->s, strlen(ms->s), 1);
+      ttywrite(ms->s, strlen(ms->s), /*may_echo=*/1);
       return;
     }
   }
@@ -495,10 +494,10 @@ void selnotify(XEvent *e) {
     }
 
     if (IS_SET(MODE_BRCKTPASTE) && ofs == 0)
-      ttywrite("\033[200~", 6, 0);
-    ttywrite((char *)data, nitems * format / 8, 1);
+      ttywrite("\033[200~", 6, /*may_echo=*/0);
+    ttywrite((char *)data, nitems * format / 8, /*may_echo=*/1);
     if (IS_SET(MODE_BRCKTPASTE) && rem == 0)
-      ttywrite("\033[201~", 6, 0);
+      ttywrite("\033[201~", 6, /*may_echo=*/0);
     XFree(data);
     /* number of 32-bit chunks returned */
     ofs += nitems * format / 32;
@@ -1462,12 +1461,12 @@ void handle_focus_event(XEvent *ev) {
     term_window.mode |= MODE_FOCUSED;
     xseturgency(0);
     if (IS_SET(MODE_FOCUS))
-      ttywrite("\033[I", 3, 0);
+      ttywrite("\033[I", 3, /*may_echo=*/0);
   } else {
     XUnsetICFocus(x_window.input_context);
     term_window.mode &= ~MODE_FOCUSED;
     if (IS_SET(MODE_FOCUS))
-      ttywrite("\033[O", 3, 0);
+      ttywrite("\033[O", 3, /*may_echo=*/0);
   }
 }
 
@@ -1535,7 +1534,7 @@ void handle_key_press_event(XEvent *ev) {
 
   /* 2. custom keys from config.h */
   if ((customkey = kmap(ksym, e->state))) {
-    ttywrite(customkey, strlen(customkey), 1);
+    ttywrite(customkey, strlen(customkey), /*may_echo=*/1);
     return;
   }
 
@@ -1554,7 +1553,7 @@ void handle_key_press_event(XEvent *ev) {
       len = 2;
     }
   }
-  ttywrite(buf, len, 1);
+  ttywrite(buf, len, /*may_echo=*/1);
 }
 
 void handle_client_message_event(XEvent *e) {
