@@ -23,10 +23,10 @@
 /* Arbitrary sizes */
 #define UTF_INVALID 0xFFFD
 #define UTF8_MAX_CHAR_SIZE 4
-#define ESC_BUF_SIZ (128 * UTF8_MAX_CHAR_SIZE)
-#define ESC_ARG_SIZ 16
-#define STR_BUF_SIZ ESC_BUF_SIZ
-#define STR_ARG_SIZ ESC_ARG_SIZ
+#define CONTROL_SEQUENCE_MAX_DATA_SIZE (128 * UTF8_MAX_CHAR_SIZE)
+#define CONTROL_SEQUENCE_MAX_PARAM_LIST_SIZE 16
+#define STR_BUF_SIZ CONTROL_SEQUENCE_MAX_DATA_SIZE
+#define STR_ARG_SIZ CONTROL_SEQUENCE_MAX_PARAM_LIST_SIZE
 
 /* macros */
 #define IS_SET(flag) ((terminal.mode & (flag)) != 0)
@@ -124,14 +124,15 @@ typedef struct {
   int *tabs;
 } Terminal;
 
-// ESC '[' [[ [<priv>] <arg> [;]] <mode> [<mode>]]
+// ESC CSI P ... P I ... I F
 typedef struct {
-  char data[ESC_BUF_SIZ]; /* raw string */
-  int data_length;        /* raw string length */
-  char priv;
-  int arg[ESC_ARG_SIZ];
-  int narg; /* nb of args */
-  char mode[2];
+  char data[CONTROL_SEQUENCE_MAX_DATA_SIZE];
+  int data_length;
+  char is_private_extension;
+  int parameters[CONTROL_SEQUENCE_MAX_PARAM_LIST_SIZE];
+  int number_of_parameters;
+  // Intermediate Bytes are not supported
+  char final_byte;
 } ControlSequence;
 
 /* ESC type [[ [<priv>] <arg> [;]] <mode>] ESC '\' */
@@ -179,7 +180,7 @@ static void tsetchar(uint32_t, Character *, int, int);
 static void tsetdirt(int, int);
 static void tsetscroll(int, int);
 static void tswapscreen(void);
-static void tsetmode(int, int, int *, int);
+static void terminal_reset_mode(int, int, int *, int);
 static int write_to_terminal(const char *, int, int);
 static void tfulldirt(void);
 static void terminal_apply_c0_control(uchar);
@@ -660,7 +661,7 @@ size_t read_from_tty_slave(void) {
 
   int bytes_written = write_to_terminal(buffer, length, /*should_show_ctrl=*/0);
   length -= bytes_written;
-  /* keep any uncomplete utf8 char for the next call */
+  /* keep any incomplete utf8 char for the next call */
   if (length > 0)
     memmove(buffer, buffer + bytes_written, length);
 
@@ -925,34 +926,36 @@ void terminal_new_line(int first_col) {
   terminal_move_to(first_col ? 0 : terminal.cursor.x, y);
 }
 
+// Parses "Parameter Bytes" only.
+// "Intermediate Bytes" are not handled.
 void control_sequence_parse() {
-  char *p = control_sequence.data;
-  char *np;
-  long int v;
-
-  control_sequence.narg = 0;
-  if (*p == '?') {
-    control_sequence.priv = 1;
-    p++;
-  }
-
   control_sequence.data[control_sequence.data_length] = '\0';
-  while (p < control_sequence.data + control_sequence.data_length) {
-    np = NULL;
-    v = strtol(p, &np, 10);
-    if (np == p)
-      v = 0;
-    if (v == LONG_MAX || v == LONG_MIN)
-      v = -1;
-    control_sequence.arg[control_sequence.narg++] = v;
-    p = np;
-    if (*p != ';' || control_sequence.narg == ESC_ARG_SIZ)
-      break;
-    p++;
+
+  char *it = control_sequence.data;
+  control_sequence.number_of_parameters = 0;
+  if (*it == '?') {
+    // '<', '=' and '>' also indicate private extentions,
+    // but are not handled here.
+    control_sequence.is_private_extension = 1;
+    it++;
   }
-  control_sequence.mode[0] = *p++;
-  control_sequence.mode[1] =
-      (p < control_sequence.data + control_sequence.data_length) ? *p : '\0';
+
+  while (it < control_sequence.data + control_sequence.data_length) {
+    char *next_parameter = NULL;
+    long int parameter_value = strtol(it, &next_parameter, 10);
+    if (next_parameter == it)
+      parameter_value = 0;
+    if (parameter_value == LONG_MAX || parameter_value == LONG_MIN)
+      parameter_value = -1;
+    control_sequence.parameters[control_sequence.number_of_parameters++] =
+        parameter_value;
+    it = next_parameter;
+    if (*it != ';' || control_sequence.number_of_parameters ==
+                          CONTROL_SEQUENCE_MAX_PARAM_LIST_SIZE)
+      break;
+    it++;
+  }
+  control_sequence.final_byte = *it;
 }
 
 /* for absolute user moves, when decom is set */
@@ -1231,24 +1234,23 @@ void tsetscroll(int t, int b) {
   terminal.bot = b;
 }
 
-void tsetmode(int priv, int set, int *args, int narg) {
-  int alt, *lim;
-
-  for (lim = args + narg; args < lim; ++args) {
-    if (priv) {
-      switch (*args) {
+void terminal_reset_mode(int is_private_extension, int should_set, int *modes,
+                         int number_of_modes) {
+  for (int *end = modes + number_of_modes; modes < end; ++modes) {
+    if (is_private_extension) {
+      switch (*modes) {
       case 1: /* DECCKM -- Cursor key */
-        xsetmode(set, MODE_APPCURSOR);
+        xsetmode(should_set, MODE_APPCURSOR);
         break;
       case 5: /* DECSCNM -- Reverse video */
-        xsetmode(set, MODE_REVERSE);
+        xsetmode(should_set, MODE_REVERSE);
         break;
       case 6: /* DECOM -- Origin */
-        MODBIT(terminal.cursor.state, set, CURSOR_ORIGIN);
+        MODBIT(terminal.cursor.state, should_set, CURSOR_ORIGIN);
         tmoveato(0, 0);
         break;
       case 7: /* DECAWM -- Auto wrap */
-        MODBIT(terminal.mode, set, MODE_WRAP);
+        MODBIT(terminal.mode, should_set, MODE_WRAP);
         break;
       case 0:  /* Error (IGNORED) */
       case 2:  /* DECANM -- ANSI/VT52 (IGNORED) */
@@ -1261,60 +1263,60 @@ void tsetmode(int priv, int set, int *args, int narg) {
       case 12: /* att610 -- Start blinking cursor (IGNORED) */
         break;
       case 25: /* DECTCEM -- Text Cursor Enable Mode */
-        xsetmode(!set, MODE_HIDE);
+        xsetmode(!should_set, MODE_HIDE);
         break;
       case 9: /* X10 mouse compatibility mode */
         xsetpointermotion(0);
         xsetmode(0, MODE_MOUSE);
-        xsetmode(set, MODE_MOUSEX10);
+        xsetmode(should_set, MODE_MOUSEX10);
         break;
       case 1000: /* 1000: report button press */
         xsetpointermotion(0);
         xsetmode(0, MODE_MOUSE);
-        xsetmode(set, MODE_MOUSEBTN);
+        xsetmode(should_set, MODE_MOUSEBTN);
         break;
       case 1002: /* 1002: report motion on button press */
         xsetpointermotion(0);
         xsetmode(0, MODE_MOUSE);
-        xsetmode(set, MODE_MOUSEMOTION);
+        xsetmode(should_set, MODE_MOUSEMOTION);
         break;
       case 1003: /* 1003: enable all mouse motions */
-        xsetpointermotion(set);
+        xsetpointermotion(should_set);
         xsetmode(0, MODE_MOUSE);
-        xsetmode(set, MODE_MOUSEMANY);
+        xsetmode(should_set, MODE_MOUSEMANY);
         break;
       case 1004: /* 1004: send focus events to tty */
-        xsetmode(set, MODE_FOCUS);
+        xsetmode(should_set, MODE_FOCUS);
         break;
       case 1006: /* 1006: extended reporting mode */
-        xsetmode(set, MODE_MOUSESGR);
+        xsetmode(should_set, MODE_MOUSESGR);
         break;
       case 1034:
-        xsetmode(set, MODE_8BIT);
+        xsetmode(should_set, MODE_8BIT);
         break;
       case 1049: /* swap screen & set/restore cursor as xterm */
         if (!allowaltscreen)
           break;
-        tcursor((set) ? CURSOR_SAVE : CURSOR_LOAD);
+        tcursor((should_set) ? CURSOR_SAVE : CURSOR_LOAD);
         /* FALLTHROUGH */
       case 47: /* swap screen */
       case 1047:
         if (!allowaltscreen)
           break;
-        alt = IS_SET(MODE_ALTSCREEN);
-        if (alt) {
+        int use_alternate_screen = IS_SET(MODE_ALTSCREEN);
+        if (use_alternate_screen) {
           tclearregion(0, 0, terminal.col - 1, terminal.row - 1);
         }
-        if (set ^ alt) /* set is always 1 or 0 */
+        if (should_set ^ use_alternate_screen)
           tswapscreen();
-        if (*args != 1049)
+        if (*modes != 1049)
           break;
         /* FALLTHROUGH */
       case 1048:
-        tcursor((set) ? CURSOR_SAVE : CURSOR_LOAD);
+        tcursor((should_set) ? CURSOR_SAVE : CURSOR_LOAD);
         break;
       case 2004: /* 2004: bracketed paste mode */
-        xsetmode(set, MODE_BRCKTPASTE);
+        xsetmode(should_set, MODE_BRCKTPASTE);
         break;
       /* Not implemented mouse modes. See comments there. */
       case 1001: /* mouse highlight mode; can hang the
@@ -1326,27 +1328,30 @@ void tsetmode(int priv, int set, int *args, int narg) {
                     and can be mistaken for other control
                     codes. */
       default:
-        fprintf(stderr, "erresc: unknown private set/reset mode %d\n", *args);
+        fprintf(stderr,
+                "terminal_reset_mode: unknown private set/reset mode %d\n",
+                *modes);
         break;
       }
     } else {
-      switch (*args) {
+      switch (*modes) {
       case 0: /* Error (IGNORED) */
         break;
       case 2:
-        xsetmode(set, MODE_KBDLOCK);
+        xsetmode(should_set, MODE_KBDLOCK);
         break;
       case 4: /* IRM -- Insertion-replacement */
-        MODBIT(terminal.mode, set, MODE_INSERT);
+        MODBIT(terminal.mode, should_set, MODE_INSERT);
         break;
       case 12: /* SRM -- Send/Receive */
-        MODBIT(terminal.mode, !set, MODE_ECHO);
+        MODBIT(terminal.mode, !should_set, MODE_ECHO);
         break;
       case 20: /* LNM -- Linefeed/new line */
-        MODBIT(terminal.mode, set, MODE_CRLF);
+        MODBIT(terminal.mode, should_set, MODE_CRLF);
         break;
       default:
-        fprintf(stderr, "erresc: unknown set/reset mode %d\n", *args);
+        fprintf(stderr, "terminal_reset_mode: unknown set/reset mode %d\n",
+                *modes);
         break;
       }
     }
@@ -1357,7 +1362,7 @@ void control_sequence_handle() {
   char buf[40];
   int len;
 
-  switch (control_sequence.mode[0]) {
+  switch (control_sequence.final_byte) {
   default:
   unknown:
     fprintf(stderr, "control_sequence_handle: unknown csi ");
@@ -1365,45 +1370,45 @@ void control_sequence_handle() {
     /* die(""); */
     break;
   case '@': /* ICH -- Insert <n> blank char */
-    DEFAULT(control_sequence.arg[0], 1);
-    tinsertblank(control_sequence.arg[0]);
+    DEFAULT(control_sequence.parameters[0], 1);
+    tinsertblank(control_sequence.parameters[0]);
     break;
   case 'A': /* CUU -- Cursor <n> Up */
-    DEFAULT(control_sequence.arg[0], 1);
+    DEFAULT(control_sequence.parameters[0], 1);
     terminal_move_to(terminal.cursor.x,
-                     terminal.cursor.y - control_sequence.arg[0]);
+                     terminal.cursor.y - control_sequence.parameters[0]);
     break;
   case 'B': /* CUD -- Cursor <n> Down */
   case 'e': /* VPR --Cursor <n> Down */
-    DEFAULT(control_sequence.arg[0], 1);
+    DEFAULT(control_sequence.parameters[0], 1);
     terminal_move_to(terminal.cursor.x,
-                     terminal.cursor.y + control_sequence.arg[0]);
+                     terminal.cursor.y + control_sequence.parameters[0]);
     break;
   case 'c': /* DA -- Device Attributes */
-    if (control_sequence.arg[0] == 0)
+    if (control_sequence.parameters[0] == 0)
       ttywrite(vtiden, strlen(vtiden), /*may_echo=*/0);
     break;
   case 'C': /* CUF -- Cursor <n> Forward */
   case 'a': /* HPR -- Cursor <n> Forward */
-    DEFAULT(control_sequence.arg[0], 1);
-    terminal_move_to(terminal.cursor.x + control_sequence.arg[0],
+    DEFAULT(control_sequence.parameters[0], 1);
+    terminal_move_to(terminal.cursor.x + control_sequence.parameters[0],
                      terminal.cursor.y);
     break;
   case 'D': /* CUB -- Cursor <n> Backward */
-    DEFAULT(control_sequence.arg[0], 1);
-    terminal_move_to(terminal.cursor.x - control_sequence.arg[0],
+    DEFAULT(control_sequence.parameters[0], 1);
+    terminal_move_to(terminal.cursor.x - control_sequence.parameters[0],
                      terminal.cursor.y);
     break;
   case 'E': /* CNL -- Cursor <n> Down and first col */
-    DEFAULT(control_sequence.arg[0], 1);
-    terminal_move_to(0, terminal.cursor.y + control_sequence.arg[0]);
+    DEFAULT(control_sequence.parameters[0], 1);
+    terminal_move_to(0, terminal.cursor.y + control_sequence.parameters[0]);
     break;
   case 'F': /* CPL -- Cursor <n> Up and first col */
-    DEFAULT(control_sequence.arg[0], 1);
-    terminal_move_to(0, terminal.cursor.y - control_sequence.arg[0]);
+    DEFAULT(control_sequence.parameters[0], 1);
+    terminal_move_to(0, terminal.cursor.y - control_sequence.parameters[0]);
     break;
   case 'g': /* TBC -- Tabulation clear */
-    switch (control_sequence.arg[0]) {
+    switch (control_sequence.parameters[0]) {
     case 0: /* clear current tab stop */
       terminal.tabs[terminal.cursor.x] = 0;
       break;
@@ -1416,21 +1421,22 @@ void control_sequence_handle() {
     break;
   case 'G': /* CHA -- Move to <col> */
   case '`': /* HPA */
-    DEFAULT(control_sequence.arg[0], 1);
-    terminal_move_to(control_sequence.arg[0] - 1, terminal.cursor.y);
+    DEFAULT(control_sequence.parameters[0], 1);
+    terminal_move_to(control_sequence.parameters[0] - 1, terminal.cursor.y);
     break;
   case 'H': /* CUP -- Move to <row> <col> */
   case 'f': /* HVP */
-    DEFAULT(control_sequence.arg[0], 1);
-    DEFAULT(control_sequence.arg[1], 1);
-    tmoveato(control_sequence.arg[1] - 1, control_sequence.arg[0] - 1);
+    DEFAULT(control_sequence.parameters[0], 1);
+    DEFAULT(control_sequence.parameters[1], 1);
+    tmoveato(control_sequence.parameters[1] - 1,
+             control_sequence.parameters[0] - 1);
     break;
   case 'I': /* CHT -- Cursor Forward Tabulation <n> tab stops */
-    DEFAULT(control_sequence.arg[0], 1);
-    write_tab_to_terminal(control_sequence.arg[0]);
+    DEFAULT(control_sequence.parameters[0], 1);
+    write_tab_to_terminal(control_sequence.parameters[0]);
     break;
   case 'J': /* ED -- Clear screen */
-    switch (control_sequence.arg[0]) {
+    switch (control_sequence.parameters[0]) {
     case 0: /* below */
       tclearregion(terminal.cursor.x, terminal.cursor.y, terminal.col - 1,
                    terminal.cursor.y);
@@ -1451,8 +1457,8 @@ void control_sequence_handle() {
       goto unknown;
     }
     break;
-  case 'K': /* EL -- Clear line */
-    switch (control_sequence.arg[0]) {
+  case 'K': // EL -- ERASE IN LINE -- ECMA-48 8.3.41
+    switch (control_sequence.parameters[0]) {
     case 0: /* right */
       tclearregion(terminal.cursor.x, terminal.cursor.y, terminal.col - 1,
                    terminal.cursor.y);
@@ -1466,64 +1472,68 @@ void control_sequence_handle() {
     }
     break;
   case 'S': /* SU -- Scroll <n> line up */
-    DEFAULT(control_sequence.arg[0], 1);
-    tscrollup(terminal.top, control_sequence.arg[0]);
+    DEFAULT(control_sequence.parameters[0], 1);
+    tscrollup(terminal.top, control_sequence.parameters[0]);
     break;
   case 'T': /* SD -- Scroll <n> line down */
-    DEFAULT(control_sequence.arg[0], 1);
-    tscrolldown(terminal.top, control_sequence.arg[0]);
+    DEFAULT(control_sequence.parameters[0], 1);
+    tscrolldown(terminal.top, control_sequence.parameters[0]);
     break;
   case 'L': /* IL -- Insert <n> blank lines */
-    DEFAULT(control_sequence.arg[0], 1);
-    tinsertblankline(control_sequence.arg[0]);
+    DEFAULT(control_sequence.parameters[0], 1);
+    tinsertblankline(control_sequence.parameters[0]);
     break;
-  case 'l': /* RM -- Reset Mode */
-    tsetmode(control_sequence.priv, 0, control_sequence.arg,
-             control_sequence.narg);
+  case 'l': // RM -- RESET MODE -- ECMA-46 8.3.106
+    terminal_reset_mode(control_sequence.is_private_extension, /*should_set=*/0,
+                        control_sequence.parameters,
+                        control_sequence.number_of_parameters);
     break;
   case 'M': /* DL -- Delete <n> lines */
-    DEFAULT(control_sequence.arg[0], 1);
-    tdeleteline(control_sequence.arg[0]);
+    DEFAULT(control_sequence.parameters[0], 1);
+    tdeleteline(control_sequence.parameters[0]);
     break;
   case 'X': /* ECH -- Erase <n> char */
-    DEFAULT(control_sequence.arg[0], 1);
+    DEFAULT(control_sequence.parameters[0], 1);
     tclearregion(terminal.cursor.x, terminal.cursor.y,
-                 terminal.cursor.x + control_sequence.arg[0] - 1,
+                 terminal.cursor.x + control_sequence.parameters[0] - 1,
                  terminal.cursor.y);
     break;
   case 'P': /* DCH -- Delete <n> char */
-    DEFAULT(control_sequence.arg[0], 1);
-    tdeletechar(control_sequence.arg[0]);
+    DEFAULT(control_sequence.parameters[0], 1);
+    tdeletechar(control_sequence.parameters[0]);
     break;
   case 'Z': /* CBT -- Cursor Backward Tabulation <n> tab stops */
-    DEFAULT(control_sequence.arg[0], 1);
-    write_tab_to_terminal(-control_sequence.arg[0]);
+    DEFAULT(control_sequence.parameters[0], 1);
+    write_tab_to_terminal(-control_sequence.parameters[0]);
     break;
   case 'd': /* VPA -- Move to <row> */
-    DEFAULT(control_sequence.arg[0], 1);
-    tmoveato(terminal.cursor.x, control_sequence.arg[0] - 1);
+    DEFAULT(control_sequence.parameters[0], 1);
+    tmoveato(terminal.cursor.x, control_sequence.parameters[0] - 1);
     break;
-  case 'h': /* SM -- Set terminal mode */
-    tsetmode(control_sequence.priv, 1, control_sequence.arg,
-             control_sequence.narg);
+  case 'h': // SM -- SET MODE -- ECMA-46 8.3.125
+    terminal_reset_mode(control_sequence.is_private_extension, /*should_set=*/1,
+                        control_sequence.parameters,
+                        control_sequence.number_of_parameters);
     break;
   case 'm': /* SGR -- Terminal attribute (color) */
-    tsetattr(control_sequence.arg, control_sequence.narg);
+    tsetattr(control_sequence.parameters,
+             control_sequence.number_of_parameters);
     break;
   case 'n': /* DSR – Device Status Report (cursor position) */
-    if (control_sequence.arg[0] == 6) {
+    if (control_sequence.parameters[0] == 6) {
       len = snprintf(buf, sizeof(buf), "\033[%i;%iR", terminal.cursor.y + 1,
                      terminal.cursor.x + 1);
       ttywrite(buf, len, /*may_echo=*/0);
     }
     break;
   case 'r': /* DECSTBM -- Set Scrolling Region */
-    if (control_sequence.priv) {
+    if (control_sequence.is_private_extension) {
       goto unknown;
     } else {
-      DEFAULT(control_sequence.arg[0], 1);
-      DEFAULT(control_sequence.arg[1], terminal.row);
-      tsetscroll(control_sequence.arg[0] - 1, control_sequence.arg[1] - 1);
+      DEFAULT(control_sequence.parameters[0], 1);
+      DEFAULT(control_sequence.parameters[1], terminal.row);
+      tsetscroll(control_sequence.parameters[0] - 1,
+                 control_sequence.parameters[1] - 1);
       tmoveato(0, 0);
     }
     break;
@@ -1984,7 +1994,7 @@ check_control_code:
              ESC_START) { // handle escape sequence
     if (terminal.escape_state_flags & ESC_CSI) {
       control_sequence.data[control_sequence.data_length++] = utf32_code_point;
-      if (BETWEEN(utf32_code_point, 0x40, 0x7E) ||
+      if (BETWEEN(utf32_code_point, 0x40, 0x7E) || // Final Byte
           control_sequence.data_length >= sizeof(control_sequence.data) - 1) {
         terminal.escape_state_flags = 0;
         control_sequence_parse();
@@ -2048,19 +2058,19 @@ check_control_code:
   }
 }
 
-int write_to_terminal(const char *buffer, int length, int show_ctrl) {
+int write_to_terminal(const char *utf8_buffer, int length, int show_ctrl) {
   int bytes_written = 0;
   int charsize;
   for (; bytes_written < length; bytes_written += charsize) {
     uint32_t utf32_code_point;
     if (IS_SET(MODE_UTF8)) {
       /* process a complete utf8 char */
-      charsize = utf8_decode(buffer + bytes_written, &utf32_code_point,
+      charsize = utf8_decode(utf8_buffer + bytes_written, &utf32_code_point,
                              length - bytes_written);
       if (charsize == 0)
         break;
     } else {
-      utf32_code_point = buffer[bytes_written] & 0xFF;
+      utf32_code_point = utf8_buffer[bytes_written] & 0xFF;
       charsize = 1;
     }
     if (show_ctrl && ISCONTROLC0(utf32_code_point)) {

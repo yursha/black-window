@@ -16,4 +16,12 @@ Black Window is a minimalistic X11 *terminal emulator* for pseudo-terminal devic
 
 ## Readings
 
+The original ECMA-48 standard (also approved as ISO/IEC 6429) describes the basic
+teletype terminal concepts.
+
 - https://www.ecma-international.org/publications/standards/Ecma-048.htm
+
+`xterm` implements a set of control functions which are not officially part of the
+standard, but are used ubiquitously, so they are de-facto standards.
+
+- http://invisible-island.net/xterm/ctlseqs/ctlseqs.html

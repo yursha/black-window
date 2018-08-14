@@ -4,7 +4,7 @@ A terminal emulator allows a user to interact with a computer using text-only in
 
 ## Black Window
 
-- LOC: 5,314
+- LOC: 5,624
 
 ## [st](http://st.suckless.org/)
 
