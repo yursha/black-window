@@ -5,9 +5,6 @@
  */
 static char *font = "inconsolata:pixelsize=20:antialias=true:autohint=true";
 
-// More like a padding.
-static int borderpx = 2;
-
 /* identification sequence returned in DA and DECID */
 char *vtiden = "\033[?6c";
 

@@ -264,13 +264,13 @@ void selpaste(const Arg *dummy) {
 void numlock(const Arg *dummy) { term_window.mode ^= MODE_NUMLOCK; }
 
 int evcol(XEvent *e) {
-  int x = e->xbutton.x - borderpx;
+  int x = e->xbutton.x;
   LIMIT(x, 0, term_window.tty_width - 1);
   return x / term_window.char_width;
 }
 
 int evrow(XEvent *e) {
-  int y = e->xbutton.y - borderpx;
+  int y = e->xbutton.y;
   LIMIT(y, 0, term_window.tty_height - 1);
   return y / term_window.char_height;
 }
@@ -576,9 +576,8 @@ void cresize(int width, int height) {
   term_window.window_width = width;
   term_window.window_height = height;
 
-  int col = (term_window.window_width - 2 * borderpx) / term_window.char_width;
-  int row =
-      (term_window.window_height - 2 * borderpx) / term_window.char_height;
+  int col = term_window.window_width / term_window.char_width;
+  int row = term_window.window_height / term_window.char_height;
   col = MAX(1, col);
   row = MAX(1, row);
 
@@ -687,10 +686,10 @@ void xhints(void) {
   sizeh->width = term_window.window_width;
   sizeh->height_inc = term_window.char_height;
   sizeh->width_inc = term_window.char_width;
-  sizeh->base_height = 2 * borderpx;
-  sizeh->base_width = 2 * borderpx;
-  sizeh->min_height = term_window.char_height + 2 * borderpx;
-  sizeh->min_width = term_window.char_width + 2 * borderpx;
+  sizeh->base_height = 0;
+  sizeh->base_width = 0;
+  sizeh->min_height = term_window.char_height;
+  sizeh->min_width = term_window.char_width;
   XSetWMProperties(X.display, X.window, NULL, NULL, NULL, 0, sizeh, &wm,
                    &class);
   XFree(sizeh);
@@ -836,10 +835,10 @@ void x_init(int cols, int rows) {
   X.cmap = XDefaultColormap(X.display, X.screen);
   xloadcols();
 
-  term_window.window_width = 2 * borderpx + cols * term_window.char_width;
-  term_window.window_height = 2 * borderpx + rows * term_window.char_height;
+  term_window.window_width = cols * term_window.char_width;
+  term_window.window_height = rows * term_window.char_height;
 
-  // Populate attributes for our terminal emulator X window.
+  // Populate attributes for our X window.
   X.attrs.background_pixel = drawing_context.col[defaultbg].pixel;
   X.attrs.border_pixel = drawing_context.col[defaultbg].pixel;
   X.attrs.bit_gravity = NorthWestGravity;
@@ -946,8 +945,8 @@ int x_make_glyph_font_specs(XftGlyphFontSpec *specs,
   FcCharSet *fccharset;
   int numspecs = 0;
 
-  float winx = borderpx + x * term_window.char_width;
-  float winy = borderpx + y * term_window.char_height;
+  float winx = x * term_window.char_width;
+  float winy = y * term_window.char_height;
   float xp;
   float yp;
   int i;
@@ -1073,8 +1072,8 @@ int x_make_glyph_font_specs(XftGlyphFontSpec *specs,
 void x_draw_glyph_font_specs(const XftGlyphFontSpec *specs, Character base,
                              int len, int x, int y) {
   int charlen = len * ((base.mode & ATTR_WIDE) ? 2 : 1);
-  int winx = borderpx + x * term_window.char_width,
-      winy = borderpx + y * term_window.char_height,
+  int winx = x * term_window.char_width,
+      winy = y * term_window.char_height,
       width = charlen * term_window.char_width;
   XftColor *fg, *bg, *temp, revfg, revbg, truefg, truebg;
   XRenderColor colfg, colbg;
@@ -1159,28 +1158,6 @@ void x_draw_glyph_font_specs(const XftGlyphFontSpec *specs, Character base,
 
   if (base.mode & ATTR_INVISIBLE)
     fg = bg;
-
-  /* Intelligent cleaning up of the borders. */
-  if (x == 0) {
-    xclear(0, (y == 0) ? 0 : winy, borderpx,
-           winy + term_window.char_height +
-               ((winy + term_window.char_height >=
-                 borderpx + term_window.tty_height)
-                    ? term_window.window_height
-                    : 0));
-  }
-  if (winx + width >= borderpx + term_window.tty_width) {
-    xclear(
-        winx + width, (y == 0) ? 0 : winy, term_window.window_width,
-        ((winy + term_window.char_height >= borderpx + term_window.tty_height)
-             ? term_window.window_height
-             : (winy + term_window.char_height)));
-  }
-  if (y == 0)
-    xclear(winx, 0, winx + width, borderpx);
-  if (winy + term_window.char_height >= borderpx + term_window.tty_height)
-    xclear(winx, winy + term_window.char_height, winx + width,
-           term_window.window_height);
 
   /* Clean up the region we want to draw to. */
   XftDrawRect(X.xft_draw, bg, winx, winy, width, term_window.char_height);
