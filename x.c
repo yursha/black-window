@@ -244,8 +244,7 @@ void clipcopy(const Arg *dummy) {
   if (xsel.primary != NULL) {
     xsel.clipboard = xstrdup(xsel.primary);
     clipboard = XInternAtom(X.display, "CLIPBOARD", 0);
-    XSetSelectionOwner(X.display, clipboard, X.window,
-                       CurrentTime);
+    XSetSelectionOwner(X.display, clipboard, X.window, CurrentTime);
   }
 }
 
@@ -253,13 +252,13 @@ void clippaste(const Arg *dummy) {
   Atom clipboard;
 
   clipboard = XInternAtom(X.display, "CLIPBOARD", 0);
-  XConvertSelection(X.display, clipboard, xsel.xtarget, clipboard,
-                    X.window, CurrentTime);
+  XConvertSelection(X.display, clipboard, xsel.xtarget, clipboard, X.window,
+                    CurrentTime);
 }
 
 void selpaste(const Arg *dummy) {
-  XConvertSelection(X.display, XA_PRIMARY, xsel.xtarget, XA_PRIMARY,
-                    X.window, CurrentTime);
+  XConvertSelection(X.display, XA_PRIMARY, xsel.xtarget, XA_PRIMARY, X.window,
+                    CurrentTime);
 }
 
 void numlock(const Arg *dummy) { term_window.mode ^= MODE_NUMLOCK; }
@@ -416,9 +415,9 @@ void selnotify(XEvent *e) {
     return;
 
   do {
-    if (XGetWindowProperty(X.display, X.window, property, ofs,
-                           BUFSIZ / 4, False, AnyPropertyType, &type, &format,
-                           &nitems, &rem, &data)) {
+    if (XGetWindowProperty(X.display, X.window, property, ofs, BUFSIZ / 4,
+                           False, AnyPropertyType, &type, &format, &nitems,
+                           &rem, &data)) {
       fprintf(stderr, "Clipboard allocation failed\n");
       return;
     }
@@ -431,8 +430,7 @@ void selnotify(XEvent *e) {
        * PropertyNotify events anymore.
        */
       MODBIT(X.attrs.event_mask, 0, PropertyChangeMask);
-      XChangeWindowAttributes(X.display, X.window, CWEventMask,
-                              &X.attrs);
+      XChangeWindowAttributes(X.display, X.window, CWEventMask, &X.attrs);
     }
 
     if (type == incratom) {
@@ -442,8 +440,7 @@ void selnotify(XEvent *e) {
        * chunk of data.
        */
       MODBIT(X.attrs.event_mask, 1, PropertyChangeMask);
-      XChangeWindowAttributes(X.display, X.window, CWEventMask,
-                              &X.attrs);
+      XChangeWindowAttributes(X.display, X.window, CWEventMask, &X.attrs);
 
       /*
        * Deleting the property is the transfer start signal.
@@ -580,7 +577,8 @@ void cresize(int width, int height) {
   term_window.window_height = height;
 
   int col = (term_window.window_width - 2 * borderpx) / term_window.char_width;
-  int row = (term_window.window_height - 2 * borderpx) / term_window.char_height;
+  int row =
+      (term_window.window_height - 2 * borderpx) / term_window.char_height;
   col = MAX(1, col);
   row = MAX(1, row);
 
@@ -594,10 +592,9 @@ void xresize(int col, int row) {
   term_window.tty_height = row * term_window.char_height;
 
   XFreePixmap(X.display, X.pixmap);
-  X.pixmap =
-      XCreatePixmap(X.display, X.window, term_window.window_width,
-                    term_window.window_height,
-                    DefaultDepth(X.display, X.screen));
+  X.pixmap = XCreatePixmap(X.display, X.window, term_window.window_width,
+                           term_window.window_height,
+                           DefaultDepth(X.display, X.screen));
   XftDrawChange(X.xft_draw, X.pixmap);
   xclear(0, 0, term_window.window_width, term_window.window_height);
 
@@ -621,14 +618,12 @@ int xloadcolor(int i, const char *name, XftColor *ncolor) {
         color.red = 0x0808 + 0x0a0a * (i - (6 * 6 * 6 + 16));
         color.green = color.blue = color.red;
       }
-      return XftColorAllocValue(X.display, X.visual,
-                                X.cmap, &color, ncolor);
+      return XftColorAllocValue(X.display, X.visual, X.cmap, &color, ncolor);
     } else
       name = colorname[i];
   }
 
-  return XftColorAllocName(X.display, X.visual, X.cmap,
-                           name, ncolor);
+  return XftColorAllocName(X.display, X.visual, X.cmap, name, ncolor);
 }
 
 void xloadcols(void) {
@@ -664,8 +659,7 @@ int xsetcolorname(int i, const char *name) {
   if (!xloadcolor(i, name, &ncolor))
     return 1;
 
-  XftColorFree(X.display, X.visual, X.cmap,
-               &drawing_context.col[i]);
+  XftColorFree(X.display, X.visual, X.cmap, &drawing_context.col[i]);
   drawing_context.col[i] = ncolor;
 
   return 0;
@@ -697,8 +691,8 @@ void xhints(void) {
   sizeh->base_width = 2 * borderpx;
   sizeh->min_height = term_window.char_height + 2 * borderpx;
   sizeh->min_width = term_window.char_width + 2 * borderpx;
-  XSetWMProperties(X.display, X.window, NULL, NULL, NULL, 0,
-                   sizeh, &wm, &class);
+  XSetWMProperties(X.display, X.window, NULL, NULL, NULL, 0, sizeh, &wm,
+                   &class);
   XFree(sizeh);
 }
 
@@ -757,9 +751,8 @@ int xloadfont(FontDescriptor *f, FcPattern *pattern) {
     }
   }
 
-  XftTextExtentsUtf8(X.display, f->match,
-                     (const FcChar8 *)ascii_printable, strlen(ascii_printable),
-                     &extents);
+  XftTextExtentsUtf8(X.display, f->match, (const FcChar8 *)ascii_printable,
+                     strlen(ascii_printable), &extents);
 
   f->set = NULL;
   f->pattern = configured;
@@ -850,21 +843,17 @@ void x_init(int cols, int rows) {
   X.attrs.background_pixel = drawing_context.col[defaultbg].pixel;
   X.attrs.border_pixel = drawing_context.col[defaultbg].pixel;
   X.attrs.bit_gravity = NorthWestGravity;
-  X.attrs.event_mask = FocusChangeMask |
-                       KeyPressMask |
-                       ExposureMask |
+  X.attrs.event_mask = FocusChangeMask | KeyPressMask | ExposureMask |
                        VisibilityChangeMask |
                        StructureNotifyMask | // We want to get MapNotify events
-                       ButtonMotionMask |
-                       ButtonPressMask |
-                       ButtonReleaseMask;
+                       ButtonMotionMask | ButtonPressMask | ButtonReleaseMask;
   X.attrs.colormap = X.cmap;
 
   // Create X window for our terminal emulator
   X.window = XCreateWindow(
-      X.display, DefaultRootWindow(X.display), /*left_offset=*/0, /*top_offset=*/0,
-      term_window.window_width, term_window.window_height, /*border_width=*/0,
-      XDefaultDepth(X.display, X.screen), InputOutput,
+      X.display, DefaultRootWindow(X.display), /*left_offset=*/0,
+      /*top_offset=*/0, term_window.window_width, term_window.window_height,
+      /*border_width=*/0, XDefaultDepth(X.display, X.screen), InputOutput,
       X.visual,
       CWBackPixel | CWBorderPixel | CWBitGravity | CWEventMask | CWColormap,
       &X.attrs);
@@ -875,10 +864,9 @@ void x_init(int cols, int rows) {
   gcvalues.graphics_exposures = False;
   drawing_context.gc = XCreateGC(X.display, DefaultRootWindow(X.display),
                                  GCGraphicsExposures, &gcvalues);
-  X.pixmap =
-      XCreatePixmap(X.display, X.window, term_window.window_width,
-                    term_window.window_height,
-                    DefaultDepth(X.display, X.screen));
+  X.pixmap = XCreatePixmap(X.display, X.window, term_window.window_width,
+                           term_window.window_height,
+                           DefaultDepth(X.display, X.screen));
   XSetForeground(X.display, drawing_context.gc,
                  drawing_context.col[defaultbg].pixel);
   XFillRectangle(X.display, X.pixmap, drawing_context.gc, 0, 0,
@@ -887,20 +875,16 @@ void x_init(int cols, int rows) {
   X.glyph_font_specs = xmalloc(cols * sizeof(XftGlyphFontSpec));
 
   /* Xft rendering context */
-  X.xft_draw = XftDrawCreate(X.display, X.pixmap,
-                                    X.visual, X.cmap);
+  X.xft_draw = XftDrawCreate(X.display, X.pixmap, X.visual, X.cmap);
 
   /* input methods */
-  if ((X.input_method =
-           XOpenIM(X.display, /*resource database=*/NULL,
-                   /*application_resource_name=*/NULL,
-                   /*application_class_name=*/NULL)) == NULL) {
+  if ((X.input_method = XOpenIM(X.display, /*resource database=*/NULL,
+                                /*application_resource_name=*/NULL,
+                                /*application_class_name=*/NULL)) == NULL) {
     XSetLocaleModifiers("@im=local");
-    if ((X.input_method = XOpenIM(X.display, NULL, NULL, NULL)) ==
-        NULL) {
+    if ((X.input_method = XOpenIM(X.display, NULL, NULL, NULL)) == NULL) {
       XSetLocaleModifiers("@im=");
-      if ((X.input_method =
-               XOpenIM(X.display, NULL, NULL, NULL)) == NULL) {
+      if ((X.input_method = XOpenIM(X.display, NULL, NULL, NULL)) == NULL) {
         die("XOpenIM failed. Could not open input"
             " device.\n");
       }
@@ -920,14 +904,13 @@ void x_init(int cols, int rows) {
 
   // X Atoms
   X.xembed = XInternAtom(X.display, "_XEMBED", False);
-  X.wmdeletewin =
-      XInternAtom(X.display, "WM_DELETE_WINDOW", False);
+  X.wmdeletewin = XInternAtom(X.display, "WM_DELETE_WINDOW", False);
   X.netwmname = XInternAtom(X.display, "_NET_WM_NAME", False);
   XSetWMProtocols(X.display, X.window, &X.wmdeletewin, 1);
 
   X.netwmpid = XInternAtom(X.display, "_NET_WM_PID", False);
-  XChangeProperty(X.display, X.window, X.netwmpid,
-                  XA_CARDINAL, 32, PropModeReplace, (uchar *)&thispid, 1);
+  XChangeProperty(X.display, X.window, X.netwmpid, XA_CARDINAL, 32,
+                  PropModeReplace, (uchar *)&thispid, 1);
 
   term_window.mode = MODE_NUMLOCK;
   resettitle();
@@ -1111,8 +1094,7 @@ void x_draw_glyph_font_specs(const XftGlyphFontSpec *specs, Character base,
     colfg.red = TRUERED(base.fg);
     colfg.green = TRUEGREEN(base.fg);
     colfg.blue = TRUEBLUE(base.fg);
-    XftColorAllocValue(X.display, X.visual, X.cmap, &colfg,
-                       &truefg);
+    XftColorAllocValue(X.display, X.visual, X.cmap, &colfg, &truefg);
     fg = &truefg;
   } else {
     fg = &drawing_context.col[base.fg];
@@ -1123,8 +1105,7 @@ void x_draw_glyph_font_specs(const XftGlyphFontSpec *specs, Character base,
     colbg.green = TRUEGREEN(base.bg);
     colbg.red = TRUERED(base.bg);
     colbg.blue = TRUEBLUE(base.bg);
-    XftColorAllocValue(X.display, X.visual, X.cmap, &colbg,
-                       &truebg);
+    XftColorAllocValue(X.display, X.visual, X.cmap, &colbg, &truebg);
     bg = &truebg;
   } else {
     bg = &drawing_context.col[base.bg];
@@ -1142,8 +1123,7 @@ void x_draw_glyph_font_specs(const XftGlyphFontSpec *specs, Character base,
       colfg.green = ~fg->color.green;
       colfg.blue = ~fg->color.blue;
       colfg.alpha = fg->color.alpha;
-      XftColorAllocValue(X.display, X.visual, X.cmap,
-                         &colfg, &revfg);
+      XftColorAllocValue(X.display, X.visual, X.cmap, &colfg, &revfg);
       fg = &revfg;
     }
 
@@ -1154,8 +1134,7 @@ void x_draw_glyph_font_specs(const XftGlyphFontSpec *specs, Character base,
       colbg.green = ~bg->color.green;
       colbg.blue = ~bg->color.blue;
       colbg.alpha = bg->color.alpha;
-      XftColorAllocValue(X.display, X.visual, X.cmap,
-                         &colbg, &revbg);
+      XftColorAllocValue(X.display, X.visual, X.cmap, &colbg, &revbg);
       bg = &revbg;
     }
   }
@@ -1165,8 +1144,7 @@ void x_draw_glyph_font_specs(const XftGlyphFontSpec *specs, Character base,
     colfg.green = fg->color.green / 2;
     colfg.blue = fg->color.blue / 2;
     colfg.alpha = fg->color.alpha;
-    XftColorAllocValue(X.display, X.visual, X.cmap, &colfg,
-                       &revfg);
+    XftColorAllocValue(X.display, X.visual, X.cmap, &colfg, &revfg);
     fg = &revfg;
   }
 
@@ -1205,8 +1183,7 @@ void x_draw_glyph_font_specs(const XftGlyphFontSpec *specs, Character base,
            term_window.window_height);
 
   /* Clean up the region we want to draw to. */
-  XftDrawRect(X.xft_draw, bg, winx, winy, width,
-              term_window.char_height);
+  XftDrawRect(X.xft_draw, bg, winx, winy, width, term_window.char_height);
 
   /* Set the clip region because Xft is sometimes dirty. */
   r.x = 0;
@@ -1220,8 +1197,8 @@ void x_draw_glyph_font_specs(const XftGlyphFontSpec *specs, Character base,
 
   /* Render underline and strikethrough. */
   if (base.mode & ATTR_UNDERLINE) {
-    XftDrawRect(X.xft_draw, fg, winx,
-                winy + drawing_context.font.ascent + 1, width, 1);
+    XftDrawRect(X.xft_draw, fg, winx, winy + drawing_context.font.ascent + 1,
+                width, 1);
   }
 
   if (base.mode & ATTR_STRUCK) {
@@ -1299,8 +1276,7 @@ void xsettitle(char *p) {
 
   Xutf8TextListToTextProperty(X.display, &p, 1, XUTF8StringStyle, &prop);
   XSetWMName(X.display, X.window, &prop);
-  XSetTextProperty(X.display, X.window, &prop,
-                   X.netwmname);
+  XSetTextProperty(X.display, X.window, &prop, X.netwmname);
   XFree(prop.value);
 }
 
@@ -1336,9 +1312,8 @@ void xdrawline(Line line, int x1, int y1, int x2) {
 }
 
 void xfinishdraw(void) {
-  XCopyArea(X.display, X.pixmap, X.window,
-            drawing_context.gc, 0, 0, term_window.window_width,
-            term_window.window_height, 0, 0);
+  XCopyArea(X.display, X.pixmap, X.window, drawing_context.gc, 0, 0,
+            term_window.window_width, term_window.window_height, 0, 0);
   XSetForeground(
       X.display, drawing_context.gc,
       drawing_context.col[IS_SET(MODE_REVERSE) ? defaultfg : defaultbg].pixel);
@@ -1363,8 +1338,7 @@ void handle_unmap_event(XEvent *ev) {
 
 void xsetpointermotion(int set) {
   MODBIT(X.attrs.event_mask, set, PointerMotionMask);
-  XChangeWindowAttributes(X.display, X.window, CWEventMask,
-                          &X.attrs);
+  XChangeWindowAttributes(X.display, X.window, CWEventMask, &X.attrs);
 }
 
 void xsetmode(int set, unsigned int flags) {
@@ -1458,7 +1432,7 @@ void handle_key_press_event(XEvent *x_event) {
   KeySym ksym;
   Status status; // Check status for errors
   int len = XmbLookupString(X.input_context, key_event, buf, sizeof buf, &ksym,
-                        &status);
+                            &status);
   /* 1. shortcuts */
   Shortcut *bp;
   for (bp = shortcuts; bp < shortcuts + LEN(shortcuts); bp++) {
@@ -1534,8 +1508,9 @@ void run(void) {
   // the content of the window may be lost when the window isn't on the screen.
   // So we wait for wait for a MapNotify before drawing.
 
-  // MapNotify will tell us the actual width and height of our window after mapping.
-  int actual_width = term_window.window_width; 
+  // MapNotify will tell us the actual width and height of our window after
+  // mapping.
+  int actual_width = term_window.window_width;
   int actual_height = term_window.window_height;
   XEvent event;
   do {
@@ -1563,8 +1538,7 @@ void run(void) {
   clock_gettime(CLOCK_MONOTONIC, &last);
   struct timespec lastblink = last;
 
-  int x_fd =
-      XConnectionNumber(X.display); // X connection file descriptor
+  int x_fd = XConnectionNumber(X.display); // X connection file descriptor
   fd_set read_fds;
   int xev;
   struct timespec *pselect_timeout = NULL;
