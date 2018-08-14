@@ -67,9 +67,6 @@ static void clipcopy(const Arg *);
 static void clippaste(const Arg *);
 static void numlock(const Arg *);
 static void selpaste(const Arg *);
-static void zoom(const Arg *);
-static void zoomabs(const Arg *);
-static void zoomreset(const Arg *);
 
 /* config.h for applying patches and the configuration. */
 #include "config.h"
@@ -155,13 +152,13 @@ static int xgeommasktogravity(int);
 static void x_init(int, int);
 static void cresize(int, int);
 static void xresize(int, int);
-static void xhints(void);
+static void xhints();
 static int xloadcolor(int, const char *, XftColor *);
 static int xloadfont(FontDescriptor *, FcPattern *);
-static void xloadfonts(char *, double);
+static void xloadfonts(char *);
 static void xunloadfont(FontDescriptor *);
-static void xunloadfonts(void);
-static void xsetenv(void);
+static void xunloadfonts();
+static void xsetenv();
 static void xseturgency(int);
 static int evcol(XEvent *);
 static int evrow(XEvent *);
@@ -233,8 +230,6 @@ typedef struct {
 /* Fontcache is an array now. A new font will be appended to the array. */
 static Fontcache frc[16];
 static int frclen = 0;
-static double usedfontsize = 0;
-static double defaultfontsize = 0;
 
 static char **opt_slave = NULL;
 
@@ -268,30 +263,6 @@ void selpaste(const Arg *dummy) {
 }
 
 void numlock(const Arg *dummy) { term_window.mode ^= MODE_NUMLOCK; }
-
-void zoom(const Arg *arg) {
-  Arg larg;
-
-  larg.f = usedfontsize + arg->f;
-  zoomabs(&larg);
-}
-
-void zoomabs(const Arg *arg) {
-  xunloadfonts();
-  xloadfonts(font, arg->f);
-  cresize(0, 0);
-  redraw();
-  xhints();
-}
-
-void zoomreset(const Arg *arg) {
-  Arg larg;
-
-  if (defaultfontsize > 0) {
-    larg.f = defaultfontsize;
-    zoomabs(&larg);
-  }
-}
 
 int evcol(XEvent *e) {
   int x = e->xbutton.x - borderpx;
@@ -605,10 +576,8 @@ void handle_mouse_motion_event(XEvent *e) {
 }
 
 void cresize(int width, int height) {
-  if (width != 0)
-    term_window.window_width = width;
-  if (height != 0)
-    term_window.window_height = height;
+  term_window.window_width = width;
+  term_window.window_height = height;
 
   int col = (term_window.window_width - 2 * borderpx) / term_window.char_width;
   int row = (term_window.window_height - 2 * borderpx) / term_window.char_height;
@@ -806,48 +775,13 @@ int xloadfont(FontDescriptor *f, FcPattern *pattern) {
   return 0;
 }
 
-void xloadfonts(char *fontstr, double fontsize) {
-  FcPattern *pattern;
-  double fontval;
-
-  pattern = FcNameParse((FcChar8 *)fontstr);
-
+void xloadfonts(char *fontstr) {
+  FcPattern *pattern = FcNameParse((FcChar8 *)fontstr);
   if (!pattern)
     die("can't open font %s\n", fontstr);
 
-  if (fontsize > 1) {
-    FcPatternDel(pattern, FC_PIXEL_SIZE);
-    FcPatternDel(pattern, FC_SIZE);
-    FcPatternAddDouble(pattern, FC_PIXEL_SIZE, (double)fontsize);
-    usedfontsize = fontsize;
-  } else {
-    if (FcPatternGetDouble(pattern, FC_PIXEL_SIZE, 0, &fontval) ==
-        FcResultMatch) {
-      usedfontsize = fontval;
-    } else if (FcPatternGetDouble(pattern, FC_SIZE, 0, &fontval) ==
-               FcResultMatch) {
-      usedfontsize = -1;
-    } else {
-      /*
-       * Default font size is 12, if none given. This is to
-       * have a known usedfontsize value.
-       */
-      FcPatternAddDouble(pattern, FC_PIXEL_SIZE, 12);
-      usedfontsize = 12;
-    }
-    defaultfontsize = usedfontsize;
-  }
-
   if (xloadfont(&drawing_context.font, pattern))
     die("can't open font %s\n", fontstr);
-
-  if (usedfontsize < 0) {
-    FcPatternGetDouble(drawing_context.font.match->pattern, FC_PIXEL_SIZE, 0,
-                       &fontval);
-    usedfontsize = fontval;
-    if (fontsize == 0)
-      defaultfontsize = fontval;
-  }
 
   /* Setting character width and height. */
   term_window.char_width = ceilf(drawing_context.font.width * cwscale);
@@ -903,7 +837,7 @@ void x_init(int cols, int rows) {
   // Load fonts.
   if (!FcInit())
     die("could not init fontconfig.\n");
-  xloadfonts(font, 0);
+  xloadfonts(font);
 
   // Load colors.
   X.cmap = XDefaultColormap(X.display, X.screen);
