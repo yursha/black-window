@@ -92,6 +92,7 @@ typedef struct {
   int mode; /* window state/mode flags */
 } TermWindow;
 
+// X resources
 typedef struct {
   Display *display;
   Colormap cmap;
@@ -151,15 +152,12 @@ static void xclear(int, int, int, int);
 static int xgeommasktogravity(int);
 static void x_init(int, int);
 static void cresize(int, int);
-static void xresize(int, int);
-static void xhints();
 static int xloadcolor(int, const char *, XftColor *);
 static int xloadfont(FontDescriptor *, FcPattern *);
 static void xloadfonts(char *);
 static void xunloadfont(FontDescriptor *);
 static void xunloadfonts();
 static void xsetenv();
-static void xseturgency(int);
 static int evcol(XEvent *);
 static int evrow(XEvent *);
 
@@ -582,11 +580,8 @@ void cresize(int width, int height) {
   row = MAX(1, row);
 
   tresize(col, row);
-  xresize(col, row);
-  ttyresize(term_window.tty_width, term_window.tty_height);
-}
 
-void xresize(int col, int row) {
+  // xresize
   term_window.tty_width = col * term_window.char_width;
   term_window.tty_height = row * term_window.char_height;
 
@@ -600,6 +595,8 @@ void xresize(int col, int row) {
   /* resize to new width */
   X.glyph_font_specs =
       xrealloc(X.glyph_font_specs, col * sizeof(XftGlyphFontSpec));
+
+  ttyresize(term_window.tty_width, term_window.tty_height);
 }
 
 ushort sixd_to_16bit(int x) { return x == 0 ? 0 : 0x3737 + 0x2828 * x; }
@@ -672,27 +669,6 @@ void xclear(int x1, int y1, int x2, int y2) {
       X.xft_draw,
       &drawing_context.col[IS_SET(MODE_REVERSE) ? defaultfg : defaultbg], x1,
       y1, x2 - x1, y2 - y1);
-}
-
-void xhints(void) {
-  XClassHint class = {termname, termname};
-  XWMHints wm = {.flags = InputHint, .input = 1};
-  XSizeHints *sizeh;
-
-  sizeh = XAllocSizeHints();
-
-  sizeh->flags = PSize | PResizeInc | PBaseSize | PMinSize;
-  sizeh->height = term_window.window_height;
-  sizeh->width = term_window.window_width;
-  sizeh->height_inc = term_window.char_height;
-  sizeh->width_inc = term_window.char_width;
-  sizeh->base_height = 0;
-  sizeh->base_width = 0;
-  sizeh->min_height = term_window.char_height;
-  sizeh->min_width = term_window.char_width;
-  XSetWMProperties(X.display, X.window, NULL, NULL, NULL, 0, sizeh, &wm,
-                   &class);
-  XFree(sizeh);
 }
 
 int xloadfont(FontDescriptor *f, FcPattern *pattern) {
@@ -917,7 +893,6 @@ void x_init(int cols, int rows) {
   // Creating a window doesn't make it appear on the screen.
   // So map our terminal window onto physical display hardware.
   XMapWindow(X.display, X.window);
-  xhints();
 
   // Flush the output buffer and then wait until all requests have been received
   // and processed by the X server.
@@ -1325,17 +1300,8 @@ void xsetmode(int set, unsigned int flags) {
     redraw();
 }
 
-void xseturgency(int add) {
-  XWMHints *h = XGetWMHints(X.display, X.window);
-
-  MODBIT(h->flags, add, XUrgencyHint);
-  XSetWMHints(X.display, X.window, h);
-  XFree(h);
-}
-
 void xbell(void) {
   if (!(IS_SET(MODE_FOCUSED)))
-    xseturgency(1);
   if (bellvolume)
     XkbBell(X.display, X.window, bellvolume, (Atom)NULL);
 }
@@ -1350,7 +1316,6 @@ void handle_focus_event(XEvent *ev) {
   if (ev->type == FocusIn) {
     XSetICFocus(X.input_context);
     term_window.mode |= MODE_FOCUSED;
-    xseturgency(0);
     if (IS_SET(MODE_FOCUS))
       ttywrite("\033[I", 3, /*may_echo=*/0);
   } else {
@@ -1454,7 +1419,6 @@ void handle_client_message_event(XEvent *e) {
   if (e->xclient.message_type == X.xembed && e->xclient.format == 32) {
     if (e->xclient.data.l[1] == XEMBED_FOCUS_IN) {
       term_window.mode |= MODE_FOCUSED;
-      xseturgency(0);
     } else if (e->xclient.data.l[1] == XEMBED_FOCUS_OUT) {
       term_window.mode &= ~MODE_FOCUSED;
     }

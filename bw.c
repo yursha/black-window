@@ -2,7 +2,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
-#include <pty.h>
+#include <pty.h> // for struct winsize
 #include <pwd.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -13,7 +13,7 @@
 #include <sys/select.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <termios.h>
+#include <termios.h> // for struct winsize
 #include <unistd.h>
 #include <wchar.h>
 
@@ -750,12 +750,13 @@ write_error:
 }
 
 void ttyresize(int tw, int th) {
+  // See openpty(3), ioctl_tty(2), ioctl_list(2)
   struct winsize w;
 
   w.ws_row = terminal.row;
   w.ws_col = terminal.col;
-  w.ws_xpixel = tw;
-  w.ws_ypixel = th;
+  //w.ws_xpixel = tw;
+  //w.ws_ypixel = th;
   if (ioctl(tty_master_fd, TIOCSWINSZ, &w) < 0)
     fprintf(stderr, "Couldn't set window size: %s\n", strerror(errno));
 }
