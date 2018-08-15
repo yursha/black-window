@@ -1240,8 +1240,10 @@ void terminal_reset_mode(int is_private_extension, int should_set, int *modes,
   for (int *end = modes + number_of_modes; modes < end; ++modes) {
     if (is_private_extension) {
       switch (*modes) {
-      case 1: /* DECCKM -- Cursor key */
-        xsetmode(should_set, MODE_APPCURSOR);
+      case 1:
+        fprintf(stderr, "bw: Slave requested to %s DECCKM (Application "
+                        "Cursor Mode), NOOP.\n",
+                        should_set ? "enable" : "disable");
         break;
       case 5: /* DECSCNM -- Reverse video */
         xsetmode(should_set, MODE_REVERSE);
@@ -1890,11 +1892,13 @@ int escape_sequence_handle(uchar ascii) {
     resettitle();
     xloadcols();
     break;
-  case '=': /* DECPAM -- Application keypad */
-    xsetmode(1, MODE_APPKEYPAD);
+  case '=':
+    fprintf(stderr, "bw: Slave requested to enable DECPAM (Application Keypad "
+                    "Mode). NOOP. \n");
     break;
-  case '>': /* DECPNM -- Normal keypad */
-    xsetmode(0, MODE_APPKEYPAD);
+  case '>':
+    fprintf(stderr, "bw: Slave requested to enable DECPNM (Normal keypad mode). "
+                    "NOOP.\n");
     break;
   case '7': /* DECSC -- Save Cursor */
     tcursor(CURSOR_SAVE);

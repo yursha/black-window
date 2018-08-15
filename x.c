@@ -43,18 +43,8 @@ typedef struct {
 } Shortcut;
 
 typedef struct {
-  uint b;
-  uint mask;
-  char *s;
-} MouseShortcut;
-
-typedef struct {
   KeySym k;
-  uint mask;
   char *s;
-  /* three-valued logic variables: 0 indifferent, 1 on, -1 off */
-  signed char appkey;    /* application keypad */
-  signed char appcursor; /* application cursor */
 } Key;
 
 /* X modifiers */
@@ -65,7 +55,6 @@ typedef struct {
 /* function definitions used in config.h */
 static void clipcopy(const Arg *);
 static void clippaste(const Arg *);
-static void numlock(const Arg *);
 static void selpaste(const Arg *);
 
 /* config.h for applying patches and the configuration. */
@@ -258,8 +247,6 @@ void selpaste(const Arg *dummy) {
   XConvertSelection(X.display, XA_PRIMARY, xsel.xtarget, XA_PRIMARY, X.window,
                     CurrentTime);
 }
-
-void numlock(const Arg *dummy) { term_window.mode ^= MODE_NUMLOCK; }
 
 int evcol(XEvent *e) {
   int x = e->xbutton.x;
@@ -879,7 +866,6 @@ void x_init(int cols, int rows) {
   XChangeProperty(X.display, X.window, X.netwmpid, XA_CARDINAL, 32,
                   PropModeReplace, (uchar *)&thispid, 1);
 
-  term_window.mode = MODE_NUMLOCK;
   resettitle();
 
   // Creating a window doesn't make it appear on the screen.
@@ -1323,38 +1309,11 @@ int match(uint mask, uint state) {
 }
 
 char *kmap(KeySym k, uint state) {
-  Key *kp;
-  int i;
-
-  /* Check for mapped keys out of X11 function keys. */
-  for (i = 0; i < LEN(mappedkeys); i++) {
-    if (mappedkeys[i] == k)
-      break;
-  }
-  if (i == LEN(mappedkeys)) {
-    if ((k & 0xFFFF) < 0xFD00)
-      return NULL;
+  for (Key *kp = key; kp < key + LEN(key); kp++) {
+    if (kp->k == k) return kp->s;
   }
 
-  for (kp = key; kp < key + LEN(key); kp++) {
-    if (kp->k != k)
-      continue;
-
-    if (!match(kp->mask, state))
-      continue;
-
-    if (IS_SET(MODE_APPKEYPAD) ? kp->appkey < 0 : kp->appkey > 0)
-      continue;
-    if (IS_SET(MODE_NUMLOCK) && kp->appkey == 2)
-      continue;
-
-    if (IS_SET(MODE_APPCURSOR) ? kp->appcursor < 0 : kp->appcursor > 0)
-      continue;
-
-    return kp->s;
-  }
-
-  return NULL;
+  return 0;
 }
 
 void handle_key_press_event(XEvent *x_event) {
