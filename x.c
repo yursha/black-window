@@ -349,19 +349,11 @@ void mousereport(XEvent *e) {
 
 void handle_mouse_button_press_event(XEvent *e) {
   struct timespec now;
-  MouseShortcut *ms;
   int snap;
 
   if (IS_SET(MODE_MOUSE) && !(e->xbutton.state & forceselmod)) {
     mousereport(e);
     return;
-  }
-
-  for (ms = mshortcuts; ms < mshortcuts + LEN(mshortcuts); ms++) {
-    if (e->xbutton.button == ms->b && match(ms->mask, e->xbutton.state)) {
-      ttywrite(ms->s, strlen(ms->s), /*may_echo=*/1);
-      return;
-    }
   }
 
   if (e->xbutton.button == Button1) {

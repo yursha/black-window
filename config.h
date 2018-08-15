@@ -103,16 +103,6 @@ static unsigned int rows = 24;
  */
 static unsigned int defaultattr = 11;
 
-/*
- * Internal mouse shortcuts.
- * Beware that overloading Button1 will disable the selection.
- */
-static MouseShortcut mshortcuts[] = {
-    /* button               mask            string */
-    {Button4, XK_ANY_MOD, "\031"},
-    {Button5, XK_ANY_MOD, "\005"},
-};
-
 /* Internal keyboard shortcuts. */
 #define MODKEY Mod1Mask
 #define TERMMOD (ControlMask | ShiftMask)
