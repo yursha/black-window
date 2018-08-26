@@ -27,7 +27,7 @@ static unsigned int tripleclicktimeout = 600;
  * alt screens
  * https://stackoverflow.com/questions/11023929/using-the-alternate-screen-in-a-bash-script
  */
-int allowaltscreen = 1;
+int allowaltscreen = 0;
 
 /* frames per second bw should at maximum draw to the screen */
 static unsigned int x_fps = 120;

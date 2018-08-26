@@ -25,3 +25,5 @@ teletype terminal concepts.
 standard, but are used ubiquitously, so they are de-facto standards.
 
 - http://invisible-island.net/xterm/ctlseqs/ctlseqs.html
+- https://vt100.net/docs/vt100-ug/
+- https://www.gnu.org/software/screen/manual/html_node/Control-Sequences.html

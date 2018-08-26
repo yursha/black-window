@@ -1157,9 +1157,6 @@ void x_draw_cursor(int cursor_x, int cursor_y, Character cursor_glyph,
     old_cursor_glyph.mode ^= ATTR_REVERSE;
   x_draw_character(old_cursor_glyph, old_cursor_x, old_cursor_y);
 
-  if (IS_SET(MODE_HIDE))
-    return;
-
   /*
    * Select the right color for the right mode.
    */
